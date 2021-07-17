@@ -15,7 +15,7 @@ def TorchModel(f):
 	return M
 
 @TorchModel
-def MPL1(n_in, n_out):
+def MLP1(n_in, n_out):
 	layers = [
 			nn.Flatten(),
 			nn.Linear(n_in, 512),
@@ -30,9 +30,9 @@ def MPL1(n_in, n_out):
 	return nn.Sequential(*layers)
 
 @TorchModel
-def MPL2(N, activations):
+def MLP2(N, activations):
 	if len(N) < 2:
-		raise Exception("MPL2 expect at least 2 input")
+		raise Exception("MLP2 expect at least 2 input")
 
 	if activations is None:
 		activations = []

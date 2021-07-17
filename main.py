@@ -8,7 +8,7 @@ from torchvision.transforms import ToTensor
 from pprint import pprint
 
 # our modules
-from models import MPL
+from models import MLP
 import models
 
 def load_data(**kwargs):
@@ -64,7 +64,7 @@ def main(config):
 		model = torch.load(checkpoint)
 		print("Model loaded")
 	except:
-		model = MPL(3072, 100).to(device)
+		model = MLP(3072, 100).to(device)
 	print(model)
 
 	epochs = 1000000

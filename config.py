@@ -21,21 +21,21 @@ parser.add_argument('--decay-rate', dest='decay_rate', default=0.1, help="learni
 # PRESETS
 parser.add_argument("--preset", dest="preset", help="Preset", type=str)
 presets = {
-		'MPL1': [
-			'--model', 'MPL1',
-			'--model-path', 'checkpoint/MPL1.pth',
+		'MLP1': [
+			'--model', 'MLP1',
+			'--model-path', 'checkpoint/MLP1.pth',
 			'--model-args', '[3072, 100]',
 			'--batch-size', '100'
 			],
-		'MPL2': [
-			'--model', 'MPL2',
-			'--model-path', 'checkpoint/MPL2.pth',
+		'MLP2': [
+			'--model', 'MLP2',
+			'--model-path', 'checkpoint/MLP2.pth',
 			'--model-args', '[[3072, 2048, 1024, 100], ["LeakyReLU", "Sigmoid"]]',
 			'--batch-size', '250'
 			],
-		'MPL3': [
-			'--model', 'MPL2',
-			'--model-path', 'checkpoint/MPL3.pth',
+		'MLP3': [
+			'--model', 'MLP2',
+			'--model-path', 'checkpoint/MLP3.pth',
 			'--model-args', '[[3072, 1024, 256, 100], ["LeakyReLU", "Sigmoid"]]',
 			'--batch-size', '250'
 			]
