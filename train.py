@@ -35,7 +35,7 @@ def main():
 		print(f"Epoch {t + 1}")
 
 		# Decay lr every 30 epoch
-		lr = config.lr * (0.1 ** (t // 30))
+		lr = config.lr * (config.decay_rate ** (t // config.decay_every))
 		optimizer = optim.Adam(config.model.parameters(), lr=lr)
 		print("Learning rate: ", lr)
 
@@ -60,7 +60,9 @@ def main():
 				correct += (pred.argmax(1) == y).type(torch.float).sum().item()
 		test_loss /= test_num_batches
 		correct /= test_size
-		print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+		print(f"Test:")
+		print(f"\tAccuracy: {(100*correct):>0.1f}%")
+		print(f"\tAvg loss: {test_loss:>8f}")
 
 
 		if correct > 0.9 or loss < 0.05:
@@ -68,7 +70,7 @@ def main():
 		# Save model
 		if config.model_path is not None:
 			torch.save(model, config.model_path)
-		print("Model saved")
+		print("Model saved\n")
 
 if __name__ == '__main__':
 	try:
