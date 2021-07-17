@@ -1,0 +1,66 @@
+import torch.nn as nn
+from functools import reduce
+
+def TorchModel(f):
+	class M(nn.Module):
+		def __init__(self, *args, **kwargs):
+			super(M, self).__init__()
+			self.model = f(*args, **kwargs)
+		
+		def forward(self, x):
+			return self.model(x)
+	
+	# Promote this class to top level, so that it is pickle-able
+	M.__qualname__ = f.__name__
+	return M
+
+@TorchModel
+def MPL1(n_in, n_out):
+	layers = [
+			nn.Flatten(),
+			nn.Linear(n_in, 512),
+			nn.ReLU(),
+			nn.Linear(512, 512),
+			nn.LeakyReLU(),
+			nn.Linear(512, 218),
+			nn.Sigmoid(),
+			nn.Linear(218, n_out),
+			# nn.Softmax(dim=1),
+			]
+	return nn.Sequential(*layers)
+
+@TorchModel
+def MPL2(N, activations):
+	if len(N) < 2:
+		raise Exception("MPL2 expect at least 2 input")
+
+	if activations is None:
+		activations = []
+	else:
+		activations = [nn.__dict__[i]() for i in activations]
+
+	layers = [nn.Flatten()]
+	for k, (i, j) in enumerate(zip(N, N[1:])):
+		layers = layers + [nn.Linear(i, j)]
+		try:
+			layers = layers + [activations[k]]
+		except Exception as e:
+			pass
+	return nn.Sequential(*layers)
+
+@TorchModel
+def CNN(n_int, n_out):
+	layers = [
+
+			]
+	return False
+
+def all_models():
+	models = {}
+	G = globals()
+	for k in G:
+		if type(G[k]) == type and issubclass(G[k], nn.Module):
+			models[k] = G[k]
+	return models
+
+all_models = all_models()
