@@ -19,7 +19,7 @@ def main():
 	train_data = DataLoader(train_data, batch_size=config.batch_size, shuffle=True)
 	test_data = CIFAR100("dataset/cifar100",
 			download=True,
-			train=True,
+			train=False, # Tội copy paste
 			transform=ToTensor())
 	test_data = DataLoader(test_data, batch_size=config.batch_size, shuffle=True)
 
