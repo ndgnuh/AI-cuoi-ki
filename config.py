@@ -31,6 +31,13 @@ presets = {
 			'--model', 'MPL2',
 			'--model-path', 'checkpoint/MPL2.pth',
 			'--model-args', '[[3072, 2048, 1024, 100], ["LeakyReLU", "Sigmoid"]]',
+			'--batch-size', '250'
+			],
+		'MPL3': [
+			'--model', 'MPL2',
+			'--model-path', 'checkpoint/MPL3.pth',
+			'--model-args', '[[3072, 1024, 256, 100], ["LeakyReLU", "Sigmoid"]]',
+			'--batch-size', '250'
 			]
 		}
 
