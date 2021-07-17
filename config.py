@@ -15,8 +15,8 @@ parser.add_argument("--batch-size", "--bs", dest="batch_size", default=100, help
 
 # LEARNING RATE
 parser.add_argument("--lr", dest="lr", default=1e-3, help="set learning rate", type=float)
-parser.add_argument('--decay-every', dest='decay_every', defaul=30, help="set N, decay learning rate every N epoch", type=int)
-parser.add_argument('--decay-rate', dest='decay_rate', defaul=0.1, help="learning rate decay coeff", type=float)
+parser.add_argument('--decay-every', dest='decay_every', default=30, help="set N, decay learning rate every N epoch", type=int)
+parser.add_argument('--decay-rate', dest='decay_rate', default=0.1, help="learning rate decay coeff", type=float)
 
 # PRESETS
 parser.add_argument("--preset", dest="preset", help="Preset", type=str)
