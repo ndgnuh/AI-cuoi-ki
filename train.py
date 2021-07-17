@@ -65,12 +65,12 @@ def main():
 		print(f"\tAvg loss: {test_loss:>8f}")
 
 
-		if correct > 0.9 or loss < 0.05:
-			break
 		# Save model
 		if config.model_path is not None:
 			torch.save(model, config.model_path)
 		print("Model saved\n")
+		if correct > 0.9 or loss < 0.05:
+			break
 
 if __name__ == '__main__':
 	try:
