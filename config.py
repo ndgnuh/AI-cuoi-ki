@@ -126,7 +126,23 @@ presets = {
     "Res18": [
         "--model", "ResNet",
         "--model-args", "[18, 3, 100]",
+        "--decay-rate", "1",
         "--model-path", "checkpoint/Res18_100.pth"
+    ],
+
+    "ResCustom": [
+        "--model", "ResNet",
+        "--model-args", """\
+        {\
+            "c1": 3,\
+            "c2": 100,\
+            "repeats": [1,1],\
+            "Block": "BasicBlock",\
+            "expand": 1\
+        }\
+        """,
+        "--decay-rate", "1",
+        "--model-path", "checkpoint/ResCustom.pth"
     ]
 }
 

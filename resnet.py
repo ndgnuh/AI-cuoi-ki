@@ -66,14 +66,17 @@ class ResNet(nn.Module):
         152: ((3, 8, 36, 3), BottleNeck, 4),
     }
 
-    def __init__(self, size, c1, c2):
+    def __init__(self, size=None, c1=None, c2=None, repeats=None, Block=None, expand=None):
         super().__init__()
         self.size = size
 
         channels = [64, 128, 256, 512]
         inchannel = channels[0]
         strides = [1, 1, 1, 2]
-        repeats, Block, expand = ResNet.config[size]
+        if size is not None:
+            repeats, Block, expand = ResNet.config[size]
+        if isinstance(Block, str):
+            Block = eval(Block)
 
         self.entry = nn.Sequential(
             nn.Conv2d(c1, inchannel, 7, padding=3, stride=2, bias=False),
