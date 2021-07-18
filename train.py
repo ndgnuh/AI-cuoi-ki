@@ -70,7 +70,7 @@ def main():
         # Save model
         if config.model_path is not None:
             torch.save(model, config.model_path)
-        print("Model saved\n")
+            print("Model saved\n")
         if correct > 0.9 or loss < 0.05:
             break
 

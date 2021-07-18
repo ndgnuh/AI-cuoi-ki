@@ -54,12 +54,74 @@ presets = {
         '--model', 'MLP2', '--model-path', 'checkpoint/MLP3.pth', '--model-args', '[[3072, 1024, 256, 100], ["LeakyReLU", "Sigmoid"]]', '--batch-size', '250'
     ],
     'MLP4': [
-        '--model', 'MLP2',
-        '--model-path',
-        'checkpoint/MLP4.pth',
-        '--model-args', '[[3072, 1024, 516, 100], ["ReLU", "Sigmoid"]]',
-                        '--batch-size', '100',
-                        '--loss-function', 'sigmoid_focal_loss',
+        '--model', 'MLP2', '--model-path', 'checkpoint/MLP4.pth', '--model-args', '[[3072, 1024, 516, 100], ["ReLU", "Sigmoid"]]', '--batch-size', '100', '--loss-function', 'L1Loss',
+    ],
+    'CNN1': [
+        '--model', 'Seq', '--model-path', 'checkpoint/CNN1.pth',
+        '--model-args', """[
+            ["Conv2d", "3, 3, 3"],
+            ["Conv2d", "3, 3, 3"],
+            ["Flatten"],
+            ["Linear", "2352, 100"]
+            ]""",
+        '--batch-size', '100'
+    ],
+    'CNN2': [
+        '--model', 'Seq', '--model-path', 'checkpoint/CNN2.pth',
+        '--model-args', """[
+            ["Conv2d", "3, 6, 4, padding=2"],
+            ["MaxPool2d", "2, padding=1"],
+            ["Conv2d", "6, 9, 4, padding=2"],
+            ["AvgPool2d", "2, padding=1"],
+            ["Conv2d", "9, 12, 2, padding=1"],
+            ["Flatten"],
+            ["Linear", "1452, 363"],
+            ["Sigmoid"],
+            ["Linear", "363, 100"],
+            ]""",
+        '--batch-size', '250'
+    ],
+    'CNN3': [
+        "--model", "Seq",
+        "--model-path", "checkpoint/CNN3.pth",
+        "--model-args", """\
+        [ \
+            ["Conv2d", "3, 36, 3, stride=2"], \
+            ["MaxPool2d", "3"], \
+            ["Flatten"], \
+            ["Linear", "900, 100"] \
+        ] \
+        """
+    ],
+    'CNN4': [
+        "--model", "Seq",
+        "--model-path", "checkpoint/CNN4.pth",
+        "--model-args", """\
+        [ \
+            ["Conv2d", "3, 72, 3, stride=2"], \
+            ["MaxPool2d", "3"], \
+            ["Flatten"], \
+            ["Linear", "1800, 100"] \
+        ] \
+        """
+    ],
+    'CNN5': [
+        "--model", "Seq",
+        "--model-path", "checkpoint/CNN5.pth",
+        "--model-args", """\
+        [ \
+            ["Conv2d", "3, 72, 4, stride=2, padding=2"], \
+            ["AvgPool2d", "4, stride=2, padding=2"], \
+            ["Conv2d", "72, 72, 4, stride=2, padding=2"], \
+            ["AvgPool2d", "4, stride=2, padding=2"], \
+            ["Conv2d", "72, 72, 4, stride=2, padding=2"], \
+            ["AvgPool2d", "4, stride=2, padding=2"], \
+            ["Conv2d", "72, 72, 4, stride=2, padding=2"], \
+            ["AvgPool2d", "4, stride=2, padding=2"], \
+            ["Flatten"], \
+            ["Linear", "288, 100"] \
+        ] \
+        """
     ]
 }
 
@@ -111,7 +173,6 @@ def patch():
                         preset.pop(j)
 
             args = args + preset
-            print(args)
             return parse_args(args)
         if config.model is None and config.model_path is None:
             parser.print_help()

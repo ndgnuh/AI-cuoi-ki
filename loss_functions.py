@@ -25,5 +25,18 @@ def find_loss_function(name: str):
 
 
 def all_loss_functions():
-    all = filter(is_loss_function, nn.__dict__)
-    return list(all)
+    all = {}
+    for lf in nn.modules.loss._Loss.__subclasses__():
+        origname = lf.__name__
+        name = lf.__name__
+        if not name.startswith('_'):
+            for i in range(10):
+                if name not in all:
+                    break
+                name = f"{origname}_{i}"
+            all[name] = lf
+    return all
+
+
+class ArcLoss(nn.modules.loss._Loss):
+    pass
