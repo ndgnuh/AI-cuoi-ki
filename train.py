@@ -32,6 +32,7 @@ def main():
     train_size = len(train_data.dataset)
     test_size = len(test_data.dataset)
     test_num_batches = len(test_data)
+    model = model.to(config.device)
     print(model)
     for t in range(config.start_epoch - 1, config.end_epoch):
         print(f"Epoch {t + 1}")
@@ -44,6 +45,8 @@ def main():
         # TRAIN
         train_loss = None
         for batch, (X, y) in enumerate(train_data):
+            X = X.to(config.device)
+            y = y.to(config.device)
             yhat = model(X)
             loss = loss_function(yhat, y)
             optimizer.zero_grad()
@@ -58,6 +61,8 @@ def main():
         test_loss, correct = 0, 0
         with torch.no_grad():
             for X, y in test_data:
+                X = X.to(config.device)
+                y = y.to(config.device)
                 pred = model(X)
                 test_loss += loss_function(pred, y).item()
                 correct += (pred.argmax(1) == y).type(torch.float).sum().item()
