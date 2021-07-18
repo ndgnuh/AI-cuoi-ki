@@ -1,5 +1,6 @@
 import torch.nn as nn
 from functools import reduce, singledispatch
+from resnet import ResNet
 
 
 def TorchModel(f):

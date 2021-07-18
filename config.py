@@ -122,6 +122,11 @@ presets = {
             ["Linear", "288, 100"] \
         ] \
         """
+    ],
+    "Res18": [
+        "--model", "ResNet",
+        "--model-args", "[18, 3, 100]",
+        "--model-path", "checkpoint/Res18_100.pth"
     ]
 }
 
