@@ -52,10 +52,10 @@ def main():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            if batch % 100 == 0:
-                train_loss, train_current = loss.item(), batch * len(X)
-                print(
-                    f"\tLoss: {train_loss:>7f}  [{train_current:>5d}/{train_size:>5d}]")
+            # if batch % 100 == 0:
+            #     train_loss, train_current = loss.item(), batch * len(X)
+            #     print(
+            #         f"\tLoss: {train_loss:>7f}  [{train_current:>5d}/{train_size:>5d}]")
 
         # TEST
         test_loss, correct = 0, 0
@@ -68,9 +68,8 @@ def main():
                 correct += (pred.argmax(1) == y).type(torch.float).sum().item()
         test_loss /= test_num_batches
         correct /= test_size
-        print(f"Test:")
-        print(f"\tAccuracy: {(100*correct):>0.1f}%")
-        print(f"\tAvg loss: {test_loss:>8f}")
+        print(
+            f"Test:\tAccuracy: {(100*correct):>0.1f}%\t\tAvg loss: {test_loss:>8f}")
 
         # Save model
         if config.model_path is not None:
