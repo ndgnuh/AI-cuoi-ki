@@ -2,28 +2,13 @@ import torch
 import numpy as np
 from torch import nn
 from torch import optim
-from torchvision.datasets import CIFAR100
-from torch.utils.data import DataLoader
-from torchvision.transforms import ToTensor
-from pprint import pprint
 from config import parser
 
 
 def main():
     config = parser.parse_args()
-
-    train_data = CIFAR100("dataset/cifar100",
-                          download=True,
-                          train=True,
-                          transform=ToTensor())
-    train_data = DataLoader(
-        train_data, batch_size=config.batch_size, shuffle=True)
-    test_data = CIFAR100("dataset/cifar100",
-                         download=True,
-                         train=False,  # Tội copy paste
-                         transform=ToTensor())
-    test_data = DataLoader(
-        test_data, batch_size=config.batch_size, shuffle=True)
+    train_data = config.train_data
+    test_data = config.test_data
 
     # Start training
     model = config.model
@@ -52,10 +37,10 @@ def main():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            # if batch % 100 == 0:
-            #     train_loss, train_current = loss.item(), batch * len(X)
-            #     print(
-            #         f"\tLoss: {train_loss:>7f}  [{train_current:>5d}/{train_size:>5d}]")
+            if batch % 100 == 0:
+                train_loss, train_current = loss.item(), batch * len(X)
+                print(
+                    f"\tLoss: {train_loss:>7f}  [{train_current:>5d}/{train_size:>5d}]")
 
         # TEST
         test_loss, correct = 0, 0
@@ -75,7 +60,7 @@ def main():
         if config.model_path is not None:
             torch.save(model, config.model_path)
             print("Model saved\n")
-        if correct > 0.9 or loss < 0.05:
+        if correct > 0.9:
             break
 
 

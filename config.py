@@ -5,6 +5,9 @@ from os.path import isfile
 import models
 import loss_functions as lfs
 import torch
+from torch.utils.data import DataLoader
+from torchvision import datasets as vision_datasets
+from torchvision.transforms import ToTensor
 
 parser = ArgumentParser(prog="python3 main.py")
 parser.add_argument("--model", "-m", dest="model",
@@ -25,6 +28,13 @@ parser.add_argument("--end-epoch", "--epoch", dest="end_epoch",
                     default=100000, help="max epochs", type=int)
 parser.add_argument("--batch-size", "--bs", dest="batch_size",
                     default=100, help="batch size", type=int)
+
+# DATASET
+parser.add_argument("--dataset", help="select dataset",
+                    dest="dataset", default="CIFAR100")
+parser.add_argument("--list-datasets", help="list dataset",
+                    dest='list_datasets', action="store_true")
+
 
 # LOSS FUNCTION
 parser.add_argument("--loss-function", dest="loss_function",
@@ -126,7 +136,6 @@ presets = {
     "Res18": [
         "--model", "ResNet",
         "--model-args", "[18, 3, 100]",
-        "--decay-rate", "1",
         "--model-path", "checkpoint/Res18_100.pth"
     ],
 
@@ -145,6 +154,35 @@ presets = {
         "--model-path", "checkpoint/ResCustom.pth"
     ]
 }
+
+
+def all_datasets():
+    Base = vision_datasets.vision.VisionDataset
+    all = []
+    for key in vision_datasets.__dict__:
+        value = vision_datasets.__dict__[key]
+        if isinstance(value, type) and issubclass(value, Base) and value != Base:
+            all.append(key)
+    return all
+
+
+def find_dataset(name, batch_size):
+    if name not in vision_datasets.__dict__:
+        raise Exception(f"Dataset {name} not found")
+    Dataset = vision_datasets.__dict__[name]
+    train_data = Dataset(f"dataset/{name}",
+                         download=True,
+                         train=True,
+                         transform=ToTensor())
+    train_data = DataLoader(
+        train_data, batch_size=batch_size, shuffle=True)
+    test_data = Dataset(f"dataset/{name}",
+                        download=True,
+                        train=False,
+                        transform=ToTensor())
+    test_data = DataLoader(
+        test_data, batch_size=batch_size, shuffle=True)
+    return train_data, test_data
 
 
 def patch():
@@ -169,6 +207,9 @@ def patch():
         config = pa(*args, **kwargs)
 
         # Model function
+        if config.list_datasets:
+            pprint(all_datasets())
+            exit(1)
         if config.list_model:
             pprint(models.all_models)
             exit(1)
@@ -199,6 +240,11 @@ def patch():
             parser.print_help()
             print("Please provide a model or model_path")
             exit(-1)
+
+        # Load dataset
+        train_data, test_data = find_dataset(config.dataset, config.batch_size)
+        config.train_data = train_data
+        config.test_data = test_data
 
         # Load model
         config.model_args = eval(config.model_args)
