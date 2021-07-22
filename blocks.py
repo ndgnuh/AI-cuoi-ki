@@ -9,20 +9,20 @@ def residual_repeat(Block, n, in_channel, out_channel, first_block):
             blocks.append(Block(
                 in_channel,
                 out_channel,
-                conv1x1=True,
                 stride=2
             ))
         else:
             blocks.append(Block(
                 out_channel,
                 out_channel,
-                conv1x1=False,
                 stride=1
             ))
     return blocks
 
 
 class ResidualBasicBlock(nn.Module):
+    expansion = 1
+
     def __init__(s, in_channel, out_channel, stride=1):
         super().__init__()
         s.layers = nn.Sequential(
@@ -50,10 +50,12 @@ class ResidualBasicBlock(nn.Module):
 
 
 class ResidualBottleneckBlock(nn.Module):
+    expansion = 4
 
     def __init__(s, in_channel, out_channel, stride=1):
         super().__init__()
-        s.expansion = 4
+        expansion = ResidualBasicBlock.expansion
+
         s.layers = nn.Sequential(
             nn.Conv2d(in_channel, out_channel, 1, bias=False),
             nn.BatchNorm2d(out_channel),
@@ -62,13 +64,13 @@ class ResidualBottleneckBlock(nn.Module):
                       stride=stride, padding=1, bias=False),
             nn.BatchNorm2d(out_channel),
             nn.ReLU(inplace=True),
-            nn.Conv2d(in_channel, out_channel * s.expansion, 1, bias=False),
-            nn.BatchNorm2d(out_channel * s.expansion)
+            nn.Conv2d(out_channel, out_channel * expansion, 1, bias=False),
+            nn.BatchNorm2d(out_channel * expansion)
         )
-        if stride != 1 or in_channel != out_channel * s.expansion:
+        if stride != 1 or in_channel != out_channel * expansion:
             s.short = nn.Sequential(
-                nn.Conv2d(in_channel, out_channel, 1),
-                nn.BatchNorm2d(out_channel)
+                nn.Conv2d(in_channel, out_channel * expansion, 1),
+                nn.BatchNorm2d(out_channel * expansion)
             )
         else:
             s.short = lambda x: x

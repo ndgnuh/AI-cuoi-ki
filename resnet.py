@@ -1,110 +1,72 @@
 import torch
 import torch.nn as nn
 
-__all__ = ["ResNet"]
-
-
-class SkipConnection(nn.Module):
-    def __init__(self, layers, connection):
-        super().__init__()
-        self.layers = layers
-        self.connection = connection
-
-    def forward(self, x):
-        if isinstance(self.connection, nn.Module):
-            return self.connection(self.layers(x))
-        else:
-            return self.connection(x, self.layers(x))
-
-
-def BasicBlock(c1, c2, connection, stride=1):
-    return SkipConnection(
-        nn.Sequential(
-            nn.Conv2d(c1, c2, 3, stride=stride, padding=1, bias=False),
-            nn.ReLU(),
-            nn.BatchNorm2d(c2),
-            nn.Conv2d(c2, c2, 3, stride=stride, padding=1, bias=False),
-            nn.BatchNorm2d(c2)
-        ), connection)
-
-
-def BottleNeck(c1, c2, connection, stride=1, expand=4):
-    return SkipConnection(nn.Sequential(
-        nn.Conv2d(c1, c2, 1, bias=False),
-        nn.BatchNorm2d(c2),
-        nn.ReLU(),
-        nn.Conv2d(c2, c2, 3, stride=stride, padding=1, bias=False),
-        nn.BatchNorm2d(c2),
-        nn.ReLU(),
-        nn.Conv2d(c2, c2 * expand, 1, bias=False),
-        nn.BatchNorm2d(c2 * expand)
-    ), connection)
-
-
-def make_res_layer(Block, c1, c2, repeat, expand, stride=1):
-    ce = c2 * expand
-    if stride == 1 and c2 == c1:
-        connection = sum
-    else:
-        connection = SkipConnection(nn.Sequential(
-            nn.Conv2d(c2, c2, 1, stride=stride, bias=False),
-            nn.BatchNorm2d(c2)
-        ), sum)
-    layers = [Block(c1, c2, connection, stride=stride)]
-    for _ in range(repeat - 1):
-        layers += [Block(ce, c2, sum)]
-
-    return nn.Sequential(*layers)
+import blocks
 
 
 class ResNet(nn.Module):
-    config = {
-        18: ((2, 2, 2, 2), BasicBlock, 1),
-        34: ((3, 4, 6, 3), BasicBlock, 1),
-        50: ((3, 4, 6, 3), BottleNeck, 4),
-        101: ((3, 4, 23, 3), BottleNeck, 4),
-        152: ((3, 8, 36, 3), BottleNeck, 4),
-    }
 
-    def __init__(self, size=None, c1=None, c2=None, repeats=None, Block=None, expand=None):
+    def __init__(s, Block, repeats, classes=100, in_channel=3, basesize=64):
         super().__init__()
-        self.size = size
+        s.basesize = basesize
+        s.expansion = 4 if Block == blocks.ResidualBottleneckBlock else 1
 
-        channels = [64, 128, 256, 512]
-        inchannel = channels[0]
-        strides = [1, 1, 1, 2]
-        if size is not None:
-            repeats, Block, expand = ResNet.config[size]
-        if isinstance(Block, str):
-            Block = eval(Block)
-
-        self.entry = nn.Sequential(
-            nn.Conv2d(c1, inchannel, 7, padding=3, stride=2, bias=False),
-            nn.BatchNorm2d(inchannel)
+        s.entry = nn.Sequential(
+            nn.Conv2d(in_channel, 64, 7, 7, padding=3),
+            nn.BatchNorm2d(64),
+            nn.MaxPool2d(3, padding=1)
         )
 
-        self.pooling = nn.MaxPool2d(3, padding=1, stride=2)
+        strides = [1, 2, 2, 2]
+        in_channels = [64, 64, 128, 256]
+        out_channels = [64, 128, 256, 512]
+        s.blocks = nn.Sequential(
+            *blocks.residual_repeat(Block, repeats[0],
+                                    64, 64, first_block=True),
+            *blocks.residual_repeat(Block, repeats[1], 64,
+                                    128, first_block=False),
+            *blocks.residual_repeat(Block, repeats[2], 128,
+                                    256, first_block=False),
+            *blocks.residual_repeat(Block, repeats[3], 256,
+                                    512, first_block=False),
+        )
 
-        self.layers = []
-        for (outchannel, stride, repeat) in zip(channels, strides, repeats):
-            self.layers += [make_res_layer(Block, inchannel, outchannel,
-                                           repeat=repeat, expand=expand, stride=stride)]
-            inchannel = outchannel * expand
-        self.layers = nn.Sequential(*self.layers)
-        if c2 is not None:
-            self.head = nn.Sequential(
-                nn.AvgPool2d(7, padding=3),
-                nn.Flatten(),
-                nn.Linear(channels[-1] * expand, c2)
-            )
-        else:
-            self.head = None
+        s.pool = nn.AvgPool2d(2)
+        s.out = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(512, classes),
+            nn.LeakyReLU()
+        )
 
-    def forward(self, x):
-        y = x
-        y = self.entry(y)
-        y = self.pooling(y)
-        y = self.layers(y)
-        if self.head:
-            y = self.head(y)
+    def featuremap(s, x):
+        y = s.entry(x)
+        y = s.blocks(y)
+        y = s.pool(y)
         return y
+
+    def forward(s, x):
+        y = s.featuremap(x)
+        y = s.out(y)
+        return y
+
+
+config = {
+    '18': [blocks.ResidualBasicBlock, [2, 2, 2, 2]],
+    '34': [blocks.ResidualBasicBlock, [3, 4, 6, 3]],
+    '50': [blocks.ResidualBottleneckBlock, [3, 4, 6, 3]],
+    '101': [blocks.ResidualBottleneckBlock, [3, 4, 23, 3]],
+    '152': [blocks.ResidualBottleneckBlock, [3, 8, 36, 3]]
+}
+
+
+def ResNetModel(size):
+    Block, repeats = config[size]
+
+    def _(*args, **kwargs):
+        return ResNet(Block, repeats, *args, **kwargs)
+    return _
+
+
+models = {'ResNet': ResNet}
+for size in config.keys():
+    models["ResNet" + size] = ResNetModel(size)
