@@ -33,7 +33,7 @@ class BaiduV2(data.Dataset):
 
         # Load input and target
         x, y = Image.open(input_ID).convert(
-            "RGB"), Image.open(target_ID).convert('LA')
+            "RGB"), Image.open(target_ID).convert('L')
 
         # Preprocessing
         if self.transform is not None:
@@ -41,5 +41,4 @@ class BaiduV2(data.Dataset):
 
         if self.target_transform is not None:
             y = self.target_transform(y)
-
         return x, y
