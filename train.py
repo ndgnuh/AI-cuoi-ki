@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from torch import nn
 from torch import optim
-import config
+from config import parse_args
 
 
 def accuracy(yhat, y, threshold=0.7):
@@ -16,7 +16,7 @@ def accuracy(yhat, y, threshold=0.7):
 
 
 def main():
-    config = config.parse_args()
+    config = parse_args()
     train_data = config.train_data
     test_data = config.test_data
     model = config.model
