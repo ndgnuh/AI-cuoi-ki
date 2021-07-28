@@ -1,284 +1,139 @@
-from argparse import ArgumentParser
-from pprint import pprint
-from torch import nn
-from os.path import isfile
-import models
-import loss_functions as lfs
+import json
+import importlib
 import torch
+import typing
+import os
+from dataclasses import dataclass
+from pprint import pprint
+from argparse import ArgumentParser
 from torch.utils.data import DataLoader
-from torchvision import datasets as vision_datasets
 from torchvision.transforms import ToTensor
+from torch import nn
+parser = ArgumentParser(prog="python3 *.py")
 
-parser = ArgumentParser(prog="python3 main.py")
-parser.add_argument("--model", "-m", dest="model",
-                    help="select model", type=str)
-parser.add_argument("--model-path", dest="model_path",
-                    help="model checkpoint path", type=str)
-parser.add_argument("--model-args", dest="model_args",
-                    help="model arguments, in python dict or list syntax (eg: '[300, 1000]')", type=str, default="[]")
-parser.add_argument('--device', '-d', dest='device',
-                    help="torch device", default=None)
-parser.add_argument("--list-model", dest="list_model", action="store_true")
-parser.add_argument("--list-preset", dest="list_preset", action="store_true")
-parser.add_argument("--old-main", dest="run_old_main",
-                    action="store_true", help="run old main function")
-parser.add_argument("--start-epoch", dest="start_epoch",
-                    default=1, help="epoch start offset", type=int)
-parser.add_argument("--end-epoch", "--epoch", dest="end_epoch",
-                    default=100000, help="max epochs", type=int)
-parser.add_argument("--batch-size", "--bs", dest="batch_size",
-                    default=100, help="batch size", type=int)
-
-# DATASET
-parser.add_argument("--dataset", help="select dataset",
-                    dest="dataset", default="CIFAR100")
-parser.add_argument("--list-datasets", help="list dataset",
-                    dest='list_datasets', action="store_true")
+parser.add_argument("--config", "-c", dest="config_file")
 
 
-# LOSS FUNCTION
-parser.add_argument("--loss-function", dest="loss_function",
-                    default="CrossEntropyLoss")
-parser.add_argument("--list-loss-function",
-                    dest="list_loss_function", default=False, action="store_true")
-
-# LEARNING RATE
-parser.add_argument("--lr", dest="lr", default=1e-3,
-                    help="set learning rate", type=float)
-parser.add_argument('--decay-every', dest='decay_every', default=30,
-                    help="set N, decay learning rate every N epoch", type=int)
-parser.add_argument('--decay-rate', dest='decay_rate',
-                    default=0.1, help="learning rate decay coeff", type=float)
-
-# PRESETS
-parser.add_argument("--preset", dest="preset", help="Preset", type=str)
-
-presets = {
-    'MLP1': [
-        '--model', 'MLP1', '--model-path', 'checkpoint/MLP1.pth', '--model-args', '[3072, 100]', '--batch-size', '100'
-    ],
-    'MLP2': [
-        '--model', 'MLP2', '--model-path', 'checkpoint/MLP2.pth', '--model-args', '[[3072, 2048, 1024, 100], ["LeakyReLU", "Sigmoid"]]', '--batch-size', '250'
-    ],
-    'MLP3': [
-        '--model', 'MLP2', '--model-path', 'checkpoint/MLP3.pth', '--model-args', '[[3072, 1024, 256, 100], ["LeakyReLU", "Sigmoid"]]', '--batch-size', '250'
-    ],
-    'MLP4': [
-        '--model', 'MLP2', '--model-path', 'checkpoint/MLP4.pth', '--model-args', '[[3072, 1024, 516, 100], ["ReLU", "Sigmoid"]]', '--batch-size', '100', '--loss-function', 'L1Loss',
-    ],
-    'CNN1': [
-        '--model', 'Seq', '--model-path', 'checkpoint/CNN1.pth',
-        '--model-args', """[
-            ["Conv2d", "3, 3, 3"],
-            ["Conv2d", "3, 3, 3"],
-            ["Flatten"],
-            ["Linear", "2352, 100"]
-            ]""",
-        '--batch-size', '100'
-    ],
-    'CNN2': [
-        '--model', 'Seq', '--model-path', 'checkpoint/CNN2.pth',
-        '--model-args', """[
-            ["Conv2d", "3, 6, 4, padding=2"],
-            ["MaxPool2d", "2, padding=1"],
-            ["Conv2d", "6, 9, 4, padding=2"],
-            ["AvgPool2d", "2, padding=1"],
-            ["Conv2d", "9, 12, 2, padding=1"],
-            ["Flatten"],
-            ["Linear", "1452, 363"],
-            ["Sigmoid"],
-            ["Linear", "363, 100"],
-            ]""",
-        '--batch-size', '250'
-    ],
-    'CNN3': [
-        "--model", "Seq",
-        "--model-path", "checkpoint/CNN3.pth",
-        "--model-args", """\
-        [ \
-            ["Conv2d", "3, 36, 3, stride=2"], \
-            ["MaxPool2d", "3"], \
-            ["Flatten"], \
-            ["Linear", "900, 100"] \
-        ] \
-        """
-    ],
-    'CNN4': [
-        "--model", "Seq",
-        "--model-path", "checkpoint/CNN4.pth",
-        "--model-args", """\
-        [ \
-            ["Conv2d", "3, 72, 3, stride=2"], \
-            ["MaxPool2d", "3"], \
-            ["Flatten"], \
-            ["Linear", "1800, 100"] \
-        ] \
-        """
-    ],
-    'CNN5': [
-        "--model", "Seq",
-        "--model-path", "checkpoint/CNN5.pth",
-        "--model-args", """\
-        [ \
-            ["Conv2d", "3, 72, 4, stride=2, padding=2"], \
-            ["AvgPool2d", "4, stride=2, padding=2"], \
-            ["Conv2d", "72, 72, 4, stride=2, padding=2"], \
-            ["AvgPool2d", "4, stride=2, padding=2"], \
-            ["Conv2d", "72, 72, 4, stride=2, padding=2"], \
-            ["AvgPool2d", "4, stride=2, padding=2"], \
-            ["Conv2d", "72, 72, 4, stride=2, padding=2"], \
-            ["AvgPool2d", "4, stride=2, padding=2"], \
-            ["Flatten"], \
-            ["Linear", "288, 100"] \
-        ] \
-        """
-    ],
-    "Res18": [
-        "--model", "ResNet",
-        "--model-args", "[18, 3, 100]",
-        "--model-path", "checkpoint/Res18_100.pth"
-    ],
-
-    "ResCustom": [
-        "--model", "ResNet",
-        "--model-args", """\
-        {\
-            "c1": 3,\
-            "c2": 100,\
-            "repeats": [1,1],\
-            "Block": "BasicBlock",\
-            "expand": 1\
-        }\
-        """,
-        "--decay-rate", "1",
-        "--model-path", "checkpoint/ResCustom.pth"
-    ]
-}
+# Get a path from dict
+def get(d, path: str, v):
+    keys = path.split("/")
+    current = d
+    for k in keys:
+        if k not in current:
+            return v
+        current = current[k]
+    return current
 
 
-def all_datasets():
-    Base = vision_datasets.vision.VisionDataset
-    all = []
-    for key in vision_datasets.__dict__:
-        value = vision_datasets.__dict__[key]
-        if isinstance(value, type) and issubclass(value, Base) and value != Base:
-            all.append(key)
-    return all
+@dataclass
+class Config:
+    model: nn.Module
+    model_path: typing.Union[None, str]
+    train_data: DataLoader
+    test_data: DataLoader
+    device: torch.device
+    optimizer: torch.optim.Optimizer
+    loss_function: typing.Any
+    lr: float
+    batch_size: int
+    decay_every: int
+    decay_rate: float
+    start_epoch: int
+    end_epoch: int
 
 
-def find_dataset(name, batch_size):
-    if name not in vision_datasets.__dict__:
-        raise Exception(f"Dataset {name} not found")
-    Dataset = vision_datasets.__dict__[name]
-    train_data = Dataset(f"dataset/{name}",
-                         download=True,
-                         train=True,
-                         transform=ToTensor())
-    train_data = DataLoader(
-        train_data, batch_size=batch_size, shuffle=True)
-    test_data = Dataset(f"dataset/{name}",
-                        download=True,
-                        train=False,
-                        transform=ToTensor())
-    test_data = DataLoader(
-        test_data, batch_size=batch_size, shuffle=True)
-    return train_data, test_data
+def import_(path: str):
+    # Import model from path
+    path = path.split(".")
+    module_name = (".").join(path[:-1])
+    symbol_name = path[-1]
+    Class = importlib.import_module(module_name).__dict__[symbol_name]
+    return Class
 
 
-def patch():
-    def init_model(key: str, arg):
-        for name in models.all_models.keys():
-            if key.lower() == name.lower():
-                model = models.all_models[key]
-                if type(arg) == type([]):
-                    return model(*arg)
-                elif type(arg) == type({}):
-                    return model(**arg)
-        raise Exception(f"Model {name} not found")
-
-    def load_model(key: str):
-        if isfile(key):
-            return torch.load(key)
-        return None
-
-    pa = parser.parse_args
-
-    def parse_args(*args, **kwargs):
-        config = pa(*args, **kwargs)
-
-        # Model function
-        if config.list_datasets:
-            pprint(all_datasets())
-            exit(1)
-        if config.list_model:
-            pprint(models.all_models)
-            exit(1)
-            return config
-        if config.list_preset:
-            pprint(presets)
-            exit(1)
-        if config.list_loss_function:
-            pprint(lfs.all_loss_functions())
-            exit(1)
-        if config.preset in presets:
-            import sys
-            args = list(args) + sys.argv[1:]
-            preset = presets[config.preset]
-            for i, arg in enumerate(args):
-                if arg == '--preset':
-                    args.pop(i)
-                    args.pop(i)
-                if arg in preset:
-                    if arg in ['--batch-size', '--model-path']:
-                        j = preset.index(arg)
-                        preset.pop(j)
-                        preset.pop(j)
-
-            args = args + preset
-            return parse_args(args)
-        if config.model is None and config.model_path is None:
-            parser.print_help()
-            print("Please provide a model or model_path")
-            exit(-1)
-
-        # Load dataset
-        train_data, test_data = find_dataset(config.dataset, config.batch_size)
-        config.train_data = train_data
-        config.test_data = test_data
-
-        # Load model
-        config.model_args = eval(config.model_args)
-        model = None
-        if config.model_path is not None:
-            model = load_model(config.model_path)
-
-        if model is None:
-            model = init_model(config.model, config.model_args)
-        config.model = model
-
-        # Transfer to device
-        if config.device is None:
-            if torch.cuda.is_available():
-                config.device = torch.device('cuda')
-            else:
-                config.device = torch.device('cpu')
-            pass
-        else:
-            config.device = torch.device(config.device)
-        pass
-        config.model = config.model.to(config.device)
-
-        # Initialize loss function
-        config.loss_function = lfs.find_loss_function(config.loss_function)
-
-        return config
-
-    # Patch
-    parser.parse_args = parse_args
+def import_and_initialize(j, path: str, *extra_args, **extra_kwargs):
+    Class = import_(j[path]["name"])
+    args = get(j, f"{path}/args", [])
+    kwargs = get(j, f"{path}/kwargs", {})
+    kwargs.update(extra_kwargs)
+    args = [*args, *extra_args]
+    return Class(*args, **kwargs)
 
 
-patch()
-del patch
+def parse_args(args=None):
+    if args is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(args)
+    j = None  # The json content
+    with open(args.config_file) as io:
+        j = json.load(io)
+
+    # Import model from config
+    model_path = get(j, "model/path", None)
+    if model_path is not None and os.path.isfile(model_path):
+        pprint(f"Loading model from {model_path}")
+        model = torch.load(model_path)
+    else:
+        Model = import_(j["model"]["name"])
+        model_args = get(j, "model/args", [])
+        model_kwargs = get(j, "model/kwargs", {})
+        model = Model(*model_args, **model_kwargs)
+
+    if "device" in j["model"]:
+        device = torch.device(j["model"]["device"])
+    elif torch.cuda.is_available():
+        device = torch.device('cuda')
+    else:
+        device = torch.device('cpu')
+    model = model.to(device)
+
+    # Hyper params
+    batch_size = get(j, "hyper/batch_size", 64)
+    lr = get(j, "hyper/lr", 1e-3)
+
+    # Import dataset from config
+    transform = get(j, "dataset/kwargs/transform", ToTensor())
+    train_data = import_and_initialize(
+        j, "dataset", train=True, transform=transform)
+    train_data = DataLoader(train_data, batch_size=batch_size, shuffle=True)
+    test_data = import_and_initialize(
+        j, "dataset", train=False, transform=transform)
+    test_data = DataLoader(test_data, batch_size=batch_size, shuffle=True)
+
+    # import the optimizer or use default
+    if "optimizer" not in j:
+        j["optimizer"] = {
+            "name": "torch.optim.Adam",
+            "kwargs": {"lr": lr}
+        }
+    optimizer = import_and_initialize(
+        j, "optimizer", model.parameters(), lr=lr)
+
+    loss_function = import_and_initialize(j, "loss")
+    if isinstance(loss_function, type):
+        loss_function = loss_function()
+
+    # hyper parameter stuffs
+
+    config = Config(
+        model=model,
+        model_path=model_path,
+        device=device,
+        train_data=train_data,
+        test_data=test_data,
+        optimizer=optimizer,
+        lr=lr,
+        batch_size=batch_size,
+        decay_every=get(j, "hyper/decay_every", 30),
+        decay_rate=get(j, "hyper/decay_rate", 0.1),
+        start_epoch=get(j, "hyper/start_epoch", 0),
+        end_epoch=get(j, "hyper/end_epoch", 1000),
+        loss_function=loss_function,
+    )
+    pprint(config)
+    return config
+
 
 if __name__ == "__main__":
-    print(parser.parse_args())
+    parse_args()

@@ -1,0 +1,17 @@
+{
+  "model": {
+    "name": "models.SimpleSeg"
+  },
+  "dataset": {
+    "name": "datasets.BaiduV2",
+    "kwargs": {
+      "datadir": "dataset/BaiduV2"
+    }
+  },
+  "hyper": {
+    "batch_size": 100
+  },
+  "loss": {
+    "name": "torch.nn.BCELoss"
+  }
+}

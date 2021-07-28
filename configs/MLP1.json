@@ -1,0 +1,13 @@
+{
+  "model": {
+    "name": "MLP1",
+    "path": "checkpoint/MLP1.pth",
+    "args": [3072, 100]
+  },
+  "dataset": {
+    "name": "vision_datasets.CIFAR100"
+  },
+  "hyper": {
+    "batch_size": 100
+  }
+}

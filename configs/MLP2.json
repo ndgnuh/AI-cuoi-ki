@@ -1,0 +1,17 @@
+{
+  "model": {
+    "name": "models.MLP2",
+    "path": "checkpoint/MLP10.pth",
+    "args": [[3072, 2048, 1024, 100], ["LeakyReLU", "Sigmoid"]]
+  },
+  "dataset": {
+    "name": "torchvision.datasets.CIFAR100",
+    "args": ["dataset/CIFAR100"]
+  },
+  "hyper": {
+    "batch_size": 100
+  },
+  "loss": {
+    "name": "torch.nn.CrossEntropyLoss"
+  }
+}

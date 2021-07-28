@@ -2,29 +2,39 @@ import torch
 import numpy as np
 from torch import nn
 from torch import optim
-from config import parser
+import config
+
+
+def accuracy(yhat, y, threshold=0.7):
+    predict = yhat >= threshold
+    truth = y >= threshold
+    TP = torch.count_nonzero(1 * (predict == True) == (truth == True))
+    FN = torch.count_nonzero(1 * (predict == True) == (truth == False))
+    TN = torch.count_nonzero(1 * (predict == False) == (truth == True))
+    FP = torch.count_nonzero(1 * (predict == False) == (truth == False))
+    return TP / (TP + 0.5 * (FP + FN))
 
 
 def main():
-    config = parser.parse_args()
+    config = config.parse_args()
     train_data = config.train_data
     test_data = config.test_data
+    model = config.model
+    optimizer = config.optimizer
+    loss_function = config.loss_function
 
     # Start training
-    model = config.model
-    lr = config.lr
-    loss_function = config.loss_function
+    lr = optimizer.param_groups[0]["lr"]
     train_size = len(train_data.dataset)
     test_size = len(test_data.dataset)
     test_num_batches = len(test_data)
-    model = model.to(config.device)
     print(model)
     for t in range(config.start_epoch - 1, config.end_epoch):
         print(f"Epoch {t + 1}")
 
         # Decay lr every 30 epoch
-        lr = config.lr * (config.decay_rate ** (t // config.decay_every))
-        optimizer = optim.Adam(config.model.parameters(), lr=lr)
+        optimizer.param_groups[0]["lr"] = config.lr * \
+            (config.decay_rate ** (t // config.decay_every))
         print("Learning rate: ", lr)
 
         # TRAIN
@@ -50,7 +60,7 @@ def main():
                 y = y.to(config.device)
                 pred = model(X)
                 test_loss += loss_function(pred, y).item()
-                correct += (pred.argmax(1) == y).type(torch.float).sum().item()
+                correct += accuracy(pred, y)
         test_loss /= test_num_batches
         correct /= test_size
         print(
@@ -60,7 +70,7 @@ def main():
         if config.model_path is not None:
             torch.save(model, config.model_path)
             print("Model saved\n")
-        if correct > 0.9:
+        if correct > 0.99:
             break
 
 
