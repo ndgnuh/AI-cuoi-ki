@@ -1,6 +1,7 @@
 {
   "model": {
-    "name": "models.SimpleSeg"
+    "name": "models.SegModel2",
+    "path": "checkpoint/SegModel2.pth"
   },
   "dataset": {
     "name": "datasets.BaiduV2",

@@ -1,0 +1,18 @@
+{
+  "model": {
+    "name": "models.SegModel1",
+    "path": "checkpoint/SegModel1.pth"
+  },
+  "dataset": {
+    "name": "datasets.BaiduV2",
+    "kwargs": {
+      "datadir": "dataset/BaiduV2"
+    }
+  },
+  "hyper": {
+    "batch_size": 100
+  },
+  "loss": {
+    "name": "torch.nn.BCELoss"
+  }
+}

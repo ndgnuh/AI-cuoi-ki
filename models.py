@@ -1,71 +1,12 @@
 import torch.nn as nn
 import torch
+import torch.functional as F
 from functools import reduce, singledispatch
 import resnet
 
 
-def TorchModel(f):
-    class M(nn.Module):
-        def __init__(self, *args, **kwargs):
-            super(M, self).__init__()
-            self.model = f(*args, **kwargs)
-
-        def forward(self, x):
-            return self.model(x)
-
-    # Promote this class to top level, so that it is pickle-able
-    M.__qualname__ = f.__name__
-    return M
-
-
-@TorchModel
-def MLP1(n_in, n_out):
-    layers = [
-        nn.Flatten(),
-        nn.Linear(n_in, 512),
-        nn.ReLU(),
-        nn.Linear(512, 512),
-        nn.LeakyReLU(),
-        nn.Linear(512, 218),
-        nn.Sigmoid(),
-        nn.Linear(218, n_out),
-        # nn.Softmax(dim=1),
-    ]
-    return nn.Sequential(*layers)
-
-
-@TorchModel
-def MLP2(N, activations):
-    if len(N) < 2:
-        raise Exception("MLP2 expect at least 2 input")
-
-    if activations is None:
-        activations = []
-    else:
-        activations = [nn.__dict__[i]() for i in activations]
-
-    layers = [nn.Flatten()]
-    for k, (i, j) in enumerate(zip(N, N[1:])):
-        layers = layers + [nn.Linear(i, j)]
-        try:
-            layers = layers + [activations[k]]
-        except Exception as e:
-            pass
-    return nn.Sequential(*layers)
-
-
-@TorchModel
-def CNN(n_int, n_out):
-    layers = [
-        nn.Conv2d(3, 3, 3),
-        nn.Flatten(),
-        nn.Linear(2700, 100)
-    ]
-    return nn.Sequential(*layers)
-
-
 class FCN(nn.Module):
-    def __init__(self, in_channel, classes, imsize):
+    def __init__(self, in_channel=3, out_channel=1):
         super(FCN, self).__init__()
         self.entry = nn.Conv2d(in_channel, 64, 1, bias=False)
 
@@ -80,16 +21,16 @@ class FCN(nn.Module):
             return nn.Sequential(*layer)
 
         def upscale():
-            return nn.ConvTranspose2d(classes, classes, 2, stride=2, bias=False)
+            return nn.ConvTranspose2d(out_channel, out_channel, 2, stride=2, bias=False)
 
         self.layer128 = makelayer(64, 128, 2)
         self.layer256 = makelayer(128, 256, 3)
         self.layer512 = makelayer(256, 512, 3)
         self.layer4096 = makelayer(512, 4096, 3)
-        self.middle = nn.Conv2d(in_channel, classes, 1, bias=False)
-        self.middle512 = nn.Conv2d(512, classes, 1, bias=False)
-        self.middle256 = nn.Conv2d(256, classes, 1, bias=False)
-        self.middle128 = nn.Conv2d(128, classes, 1, bias=False)
+        self.middle = nn.Conv2d(in_channel, out_channel, 1, bias=False)
+        self.middle512 = nn.Conv2d(512, out_channel, 1, bias=False)
+        self.middle256 = nn.Conv2d(256, out_channel, 1, bias=False)
+        self.middle128 = nn.Conv2d(128, out_channel, 1, bias=False)
         self.middle4096 = nn.Sequential(
             nn.Conv2d(4096, 4096, 3, padding=1, bias=False),
             nn.ReLU(),
@@ -98,16 +39,17 @@ class FCN(nn.Module):
             nn.Conv2d(4096, 4096, 3, padding=1, bias=False),
             nn.ReLU(),
             nn.MaxPool2d(2, padding=1),
-            nn.Conv2d(4096, classes, 1, bias=False)
+            nn.Conv2d(4096, out_channel, 1, bias=False)
         )
         self.decode1 = upscale()
         self.decode2 = upscale()
         self.decode3 = upscale()
         self.decode4 = upscale()
-        self.output = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(imsize * imsize, classes)
-        )
+        self.output = nn.Sigmoid()
+        # self.output = nn.Sequential(
+        #     nn.Flatten(),
+        #     nn.Linear(imsize * imsize, out_channel)
+        # )
 
     # Size: size of image n * n
     def forward(self, x):  # size-n
@@ -177,22 +119,51 @@ class Untitled(nn.Module):
         return y
 
 
-@TorchModel
-def Seq(*args):
-    """
-    args = [
-        ["Conv2d", "3, 3, 3"],
-        ["AvgPool2d", "3, padding=1"],
-        ["Flatten"]
-        ["Linear", "1000, 1000"]
-        ]
-    """
-    layer = []
-    for arg in args:
-        name = arg[0]
-        astr = str(arg[1:]).strip("'()[]")
-        layer = layer + [eval(f"nn.{name}({astr})")]
-    return nn.Sequential(*layer)
+class SegModel1(nn.Module):
+    def __init__(s):
+        super().__init__()
+        s.layers = nn.Sequential(
+            nn.Conv2d(3, 32, 3, padding=1),
+            nn.AvgPool2d(2),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(32, 1, 2, stride=2),
+            nn.Sigmoid())
+
+    def forward(s, y):
+        return s.layers(y)
+
+
+class SegModel2(nn.Module):
+    def __init__(s):
+        super().__init__()
+        s.entry = nn.Conv2d(3, 32, 1)
+        s.blocks = [s.entry]
+        nblocks = 2
+        for i in range(nblocks):
+            block = nn.Sequential(
+                nn.Conv2d(32, 32, 3, padding=1),
+                nn.AvgPool2d(2),
+                nn.ReLU(inplace=True)
+            )
+            setattr(s, f"block{i}", block)
+            s.blocks.append(block)
+        for i in range(nblocks):
+            block = nn.Sequential(
+                nn.ConvTranspose2d(32, 32, 2, stride=2),
+                nn.ReLU(inplace=True)
+            )
+            s.blocks.append(block)
+            setattr(s, f"up_block{i}", block)
+        s.out = nn.Sequential(
+            nn.Conv2d(32, 1, 1),
+            nn.Sigmoid()
+        )
+        s.blocks.append(s.out)
+
+    def forward(s, y):
+        for block in s.blocks:
+            y = block(y)
+        return y
 
 
 def all_models():
