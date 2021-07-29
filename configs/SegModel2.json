@@ -4,9 +4,9 @@
     "path": "checkpoint/SegModel2.pth"
   },
   "dataset": {
-    "name": "datasets.BaiduV2",
+    "name": "datasets.SegmentationData",
     "kwargs": {
-      "datadir": "dataset/BaiduV2"
+      "datadir": "dataset/Portrait-128"
     }
   },
   "hyper": {

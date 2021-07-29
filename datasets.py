@@ -4,7 +4,7 @@ from torch.utils import data
 from PIL import Image
 
 
-class BaiduV2(data.Dataset):
+class SegmentationData(data.Dataset):
     # Download option does nothing
     # it just there to ensure the method call does has the same attribute
     def __init__(self, datadir, train, download=None, transform=None, target_transform=None):
