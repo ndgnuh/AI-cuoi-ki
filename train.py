@@ -8,11 +8,14 @@ from config import parse_args
 def accuracy(yhat, y, threshold=0.7):
     predict = yhat >= threshold
     truth = y >= threshold
-    TP = torch.count_nonzero(1 * (predict == True) == (truth == True))
-    FN = torch.count_nonzero(1 * (predict == True) == (truth == False))
-    TN = torch.count_nonzero(1 * (predict == False) == (truth == True))
-    FP = torch.count_nonzero(1 * (predict == False) == (truth == False))
-    return TP / (TP + 0.5 * (FP + FN))
+    TP = torch.count_nonzero(torch.logical_and(predict == True, truth == True))
+    FP = torch.count_nonzero(torch.logical_and(
+        predict == True, truth == False))
+    TN = torch.count_nonzero(torch.logical_and(
+        predict == False, truth == False))
+    FN = torch.count_nonzero(torch.logical_and(
+        predict == False, truth == True))
+    return TP / (TP + 0.5 * (FP + FN)) * 100
 
 
 def main():
@@ -28,14 +31,14 @@ def main():
     train_size = len(train_data.dataset)
     test_size = len(test_data.dataset)
     test_num_batches = len(test_data)
-    print(model)
+    print(len(train_data))
     for t in range(config.start_epoch - 1, config.end_epoch):
         print(f"Epoch {t + 1}")
 
         # Decay lr every 30 epoch
-        optimizer.param_groups[0]["lr"] = config.lr * \
+        optimizer.param_groups[0]["lr"] = lr * \
             (config.decay_rate ** (t // config.decay_every))
-        print("Learning rate: ", lr)
+        print("Learning rate: ", optimizer.param_groups[0]["lr"])
 
         # TRAIN
         train_loss = None
@@ -47,10 +50,10 @@ def main():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            if batch % 100 == 0:
+            if batch % 25 == 0:
                 train_loss, train_current = loss.item(), batch * len(X)
                 print(
-                    f"\tLoss: {train_loss:>7f}  [{train_current:>5d}/{train_size:>5d}]")
+                    f"\tBatch: {batch}, Loss: {train_loss:>7f}  [{train_current:>5d}/{train_size:>5d}]")
 
         # TEST
         test_loss, correct = 0, 0
