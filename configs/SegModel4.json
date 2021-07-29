@@ -1,7 +1,7 @@
 {
   "model": {
-    "name": "models.SegModel1",
-    "path": "checkpoint/SegModel1.pth"
+    "name": "models.SegModel4",
+    "path": "checkpoint/SegModel4.pth"
   },
   "dataset": {
     "name": "datasets.BaiduV2",
@@ -11,8 +11,8 @@
   },
   "hyper": {
     "batch_size": 100,
-    "decay_every": 15,
-    "lr": 1e-4
+    "lr": 0.0001,
+    "decay_every": 10
   },
   "loss": {
     "name": "torch.nn.BCELoss"

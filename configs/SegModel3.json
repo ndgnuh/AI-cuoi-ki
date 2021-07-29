@@ -1,18 +1,18 @@
 {
   "model": {
-    "name": "models.SegModel1",
-    "path": "checkpoint/SegModel1.pth"
+    "name": "models.SegModel3",
+    "path": "checkpoint/SegModel3.pth"
   },
   "dataset": {
     "name": "datasets.BaiduV2",
     "kwargs": {
-      "datadir": "dataset/Portrait-128/"
+      "datadir": "dataset/Portrait-128"
     }
   },
   "hyper": {
     "batch_size": 100,
     "decay_every": 15,
-    "lr": 1e-4
+    "lr": 0.001
   },
   "loss": {
     "name": "torch.nn.BCELoss"

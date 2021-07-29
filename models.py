@@ -2,7 +2,6 @@ import torch.nn as nn
 import torch
 import torch.functional as F
 from functools import reduce, singledispatch
-import resnet
 
 
 class FCN(nn.Module):
@@ -166,15 +165,105 @@ class SegModel2(nn.Module):
         return y
 
 
-def all_models():
-    models = {}
-    models.update(resnet.models)
+class SkipConnection(nn.Module):
+    def __init__(s, skips, con):
+        super().__init__()
+        s.skips = skips
+        s.con = con
+        # Just for pretty printing
+        # forward doesn't need this
+        for (i, skip) in enumerate(skips):
+            setattr(s, f"skip_{i}", skip)
 
-    G = globals()
-    for k in G:
-        if type(G[k]) == type and issubclass(G[k], nn.Module):
-            models[k] = G[k]
-    return models
+    def forward(s, x):
+        ys = [skip(x) for skip in s.skips]
+        return s.con(x, *ys)
 
 
-all_models = all_models()
+class SegModel3(nn.Module):
+    def __init__(s, nblocks=4):
+        super().__init__()
+        # Build from the middle
+        layer = SkipConnection([
+            nn.Sequential(
+                nn.Conv2d(64, 128, 3, padding=1),
+                nn.MaxPool2d(2),  # downscale 2x
+                nn.BatchNorm2d(128),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(128, 64, 2, stride=2)  # upscale 2x
+            )
+        ], sum)
+        layer = SkipConnection([
+            nn.Sequential(
+                nn.Conv2d(32, 64, 3, padding=1),
+                nn.MaxPool2d(2),
+                nn.BatchNorm2d(64),
+                nn.ReLU(inplace=True),
+                layer,
+                nn.ConvTranspose2d(64, 32, 2, stride=2),
+            )
+        ], sum)
+        layer = SkipConnection([
+            nn.Sequential(
+                nn.Conv2d(3, 32, 3, padding=1),
+                nn.MaxPool2d(2),
+                nn.BatchNorm2d(32),
+                nn.ReLU(inplace=true),
+                layer,
+                nn.ConvTranspose2d(32, 3, 2, stride=2),
+            )
+        ], sum)
+        s.layer = layer
+        s.out = nn.Sequential(
+            nn.Conv2d(3, 1, 1),
+            nn.Sigmoid()
+        )
+
+    def forward(s, x):
+        return s.out(s.layer(x))
+
+
+def sumoutput(x, mx1, mx2):
+    return mx1 + mx2
+
+
+class SegModel4(nn.Module):
+    def __init__(s, channels=None):
+        super(SegModel4, s).__init__()
+        if channels is None:
+            channels = ([64, 128, 256, 512, 1024])
+        channels.reverse()
+        s.entry = nn.Conv2d(3, channels[-1], 7, padding=3)
+        s.blocks = [s.entry]
+        block = None
+        for i, (c2, c1) in enumerate(zip(channels, channels[1:])):
+            conv1x1 = nn.Conv2d(c1, c2, 1)
+            feed = nn.Sequential(
+                *[b for b in [
+                        nn.Conv2d(c1, c2, 3, padding=1),
+                        block,
+                        nn.AvgPool2d(2),
+                        nn.BatchNorm2d(c2),
+                        nn.LeakyReLU(inplace=True),
+                        nn.ConvTranspose2d(c2, c2, 2, stride=2)
+                ] if b is not None]
+            )
+            block = SkipConnection(
+                [conv1x1, feed],
+                sumoutput
+            )
+
+        s.feed = block
+        s.blocks.append(block)
+
+        s.output = nn.Sequential(
+            nn.Conv2d(channels[0], 1, 7, padding=3),
+            nn.Sigmoid()
+        )
+        s.blocks.append(s.output)
+
+    def forward(s, x):
+        y = x
+        for b in s.blocks:
+            y = b(y)
+        return y
