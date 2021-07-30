@@ -3,6 +3,112 @@ import torch
 import torch.functional as F
 from functools import reduce, singledispatch
 
+class InvertedResidual(nn.Module):
+    def __init__(s, i, o, st):
+        super(InvertedResidual, s).__init__()
+        assert st in [1, 2]
+
+        s.res = i == o and st == 1
+        s.feed = nn.Sequential(
+                nn.Conv2d(i, o, 1),
+                nn.BatchNorm2d(o),
+                nn.ReLU6(inplace=True),
+                nn.Conv2d(o, o, 3, groups=o, padding=1, stride=st),
+                nn.BatchNorm2d(o),
+                nn.ReLU6(inplace=True),
+                nn.Conv2d(o, o, 1),
+                )
+
+    def forward(s, x):
+        if s.res:
+            return x + s.feed(x)
+        else:
+            return s.feed(x)
+
+class MobileNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        settings = [
+            [3, 16, 1],
+            [16, 24, 1],
+            [24, 24, 1],
+            [24, 32, 1],
+            [32, 32, 1],
+            ]
+        layers = []
+        for (i, o, st) in settings:
+            layers.append(InvertedResidual(i, o, st))
+        layers.extend([
+            nn.Conv2d(32, 1, 7, padding=3),
+            nn.Sigmoid()
+        ])
+        self.feed = nn.Sequential(*layers)
+            
+    def forward(s, x):
+        return s.feed(x)
+
+class FCN8(nn.Module):
+
+    def __init__(self, numclass = 1):
+        self.__cepoch = 0
+        super(FCN8, self).__init__()
+        self.conv11 = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, padding=1)
+        self.conv12 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1)
+        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        self.conv21 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1)
+        self.conv22 = nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1)
+        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        self.conv31 = nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1)
+        self.conv32 = nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1)
+        self.conv33 = nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1)
+        self.pool3 = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        self.conv41 = nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=1)
+        self.conv42 = nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1)
+        self.conv43 = nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1)
+        self.pool4 = nn.MaxPool2d(kernel_size=2, stride=2, padding=1)
+
+        self.conv51 = nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1)
+        self.conv52 = nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1)
+        self.conv53 = nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1)
+        self.pool5 = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        self.conv6 = nn.Conv2d(in_channels=512, out_channels=4096, kernel_size=7, padding=3)
+        self.dropout1 = nn.Dropout(0.85)
+
+        self.conv7 = nn.Conv2d(in_channels=4096, out_channels=4096, kernel_size=1)
+        self.dropout2 = nn.Dropout(0.85)
+
+        self.conv8 = nn.Conv2d(in_channels=4096, out_channels=numclass, kernel_size=1)
+
+        self.tranconv1 = nn.ConvTranspose2d(in_channels=numclass, out_channels=512, kernel_size=4, stride=2)
+
+        self.tranconv2 = nn.ConvTranspose2d(in_channels=512, out_channels=256, kernel_size=4, stride=2, padding=2, output_padding=1)
+
+        self.tranconv3 = nn.ConvTranspose2d(in_channels=256, out_channels=numclass, kernel_size=16, stride=8, padding=4)
+
+    def set_cepoch(self, ce):
+        self.__cepoch = ce
+
+    def forward(self, x):
+        x = self.conv12(self.conv11(x))
+        x = self.pool1(x)
+        x = self.pool2(self.conv22(self.conv21(x)))
+        x1 = self.pool3(self.conv33(self.conv32(self.conv31(x))))
+        x2 = self.pool4(self.conv43(self.conv42(self.conv41(x1))))
+        x = self.pool5(self.conv53(self.conv52(self.conv51(x2))))
+        x = self.dropout1(self.conv6(x))
+        x = self.dropout2(self.conv7(x))
+        x = self.conv8(x)
+        x = self.tranconv1(x)
+        print(x.shape, x2.shape)
+        x = x2 + x
+        x = self.tranconv2(x)
+        x = x1 + x
+        x = self.tranconv3(x)
+        return x
 
 class FCN(nn.Module):
     def __init__(self, in_channel=3, out_channel=1):
@@ -62,7 +168,8 @@ class FCN(nn.Module):
         y = self.decode2(y) + self.middle256(y256)  # size n/4
         y = self.decode3(y) + self.middle128(y128)  # size n / 2
         y = self.decode4(y) + self.middle(x)  # size n
-        return self.output(torch.sum(y, dim=1))
+        y = self.output(y)
+        return y
 
 
 class SkipConnection(nn.Module):
@@ -237,7 +344,6 @@ class SegModel4(nn.Module):
         s.blocks = [s.entry]
         block = None
         for i, (c2, c1) in enumerate(zip(channels, channels[1:])):
-            conv1x1 = nn.Conv2d(c1, c2, 1)
             feed = nn.Sequential(
                 *[b for b in [
                         nn.Conv2d(c1, c2, 3, padding=1),
@@ -245,17 +351,18 @@ class SegModel4(nn.Module):
                         nn.AvgPool2d(2),
                         nn.BatchNorm2d(c2),
                         nn.LeakyReLU(inplace=True),
-                        nn.ConvTranspose2d(c2, c2, 2, stride=2)
+                        nn.ConvTranspose2d(c2, c1, 2, stride=2)
                 ] if b is not None]
             )
             block = SkipConnection(
-                [conv1x1, feed],
-                sumoutput
+                [feed],
+                sum
             )
 
         s.feed = block
         s.blocks.append(block)
 
+        channels.reverse()
         s.output = nn.Sequential(
             nn.Conv2d(channels[0], 1, 7, padding=3),
             nn.Sigmoid()
@@ -267,3 +374,135 @@ class SegModel4(nn.Module):
         for b in s.blocks:
             y = b(y)
         return y
+
+# Based on alex net
+class SegModel5(nn.Module):
+    def __init__(s):
+        super().__init__()
+        s.conv1 = nn.Conv2d(3, 96, 11, stride=4)
+        s.pool1 = nn.MaxPool2d(3, stride=2)
+        s.conv2 = nn.Conv2d(96, 256, 5, padding=2)
+        s.pool2 = nn.MaxPool2d(3, stride=2)
+        s.conv3 = nn.Conv2d(256, 384, 3, padding=1)
+        s.conv4 = nn.Conv2d(384, 384, 3, padding=1)
+        s.conv5 = nn.Conv2d(384, 256, 3, padding=1)
+        s.pool5 = nn.MaxPool2d(3, stride=2)
+
+        s.tconv1 = nn.ConvTranspose2d(256, 1, 3, stride=2)
+        s.tconv2 = nn.ConvTranspose2d(1, 1, 3, stride=2)
+        s.tconv3 = nn.ConvTranspose2d(1, 1, 3, stride=2)
+        s.tconv4 = nn.ConvTranspose2d(1, 1, 11, stride=4)
+        s.out = nn.Sigmoid()
+
+    def forward(s, x):
+        y = s.conv3(s.pool2(s.conv2(s.pool1(s.conv1(x)))))
+        y = s.conv4(y) + y
+        y = s.pool5(s.conv5(y))
+        y = s.tconv1(y)
+        y = s.tconv2(y)
+        y = s.tconv3(y)
+        y = s.tconv4(y)
+        y = nn.functional.interpolate(y, (x.shape[2], x.shape[3]))
+        y = s.out(y)
+        return y
+
+# Model 5 but add ReLu and BatchNorm
+# and the tconv are 3 channels
+class SegModel6(nn.Module):
+    def __init__(s):
+        super().__init__()
+        s.conv1 = nn.Conv2d(3, 96, 11, stride=4)
+        s.pool1 = nn.MaxPool2d(3, stride=2)
+        s.relu1 = nn.ReLU6(inplace=True)
+        s.conv2 = nn.Conv2d(96, 256, 5, padding=2)
+        s.pool2 = nn.MaxPool2d(3, stride=2)
+        s.relu2 = nn.ReLU6(inplace=True)
+        s.conv3 = nn.Conv2d(256, 384, 3, padding=1)
+        s.btnm3 = nn.BatchNorm2d(384)
+        s.relu3 = nn.ReLU6(inplace=True)
+        s.conv4 = nn.Conv2d(384, 384, 3, padding=1)
+        s.relu4 = nn.ReLU6(inplace=True)
+        s.conv5 = nn.Conv2d(384, 256, 3, padding=1)
+        s.pool5 = nn.MaxPool2d(3, stride=2)
+        s.btnm5 = nn.BatchNorm2d(256)
+        s.relu5 = nn.ReLU6(inplace=True)
+
+        s.tconv1 = nn.ConvTranspose2d(256, 1, 3, stride=2)
+        s.tconv2 = nn.ConvTranspose2d(1, 1, 3, stride=2)
+        s.tconv3 = nn.ConvTranspose2d(1, 1, 3, stride=2)
+        s.tconv4 = nn.ConvTranspose2d(1, 1, 11, stride=4)
+        s.out = nn.Sigmoid()
+
+    def forward(s, x):
+        y = s.conv1(x)
+        y = s.pool1(y)
+        y = s.relu1(y)
+        y = s.conv2(y)
+        y = s.pool2(y)
+        y = s.relu2(y)
+        y = s.conv3(y)
+        y = s.btnm3(y)
+        y = s.relu3(y)
+        y = s.conv4(y) + y
+        y = s.relu4(y)
+        y = s.conv5(y)
+        y = s.pool5(y)
+        y = s.btnm5(y)
+        y = s.relu5(y)
+        y = s.tconv1(y)
+        y = s.tconv2(y)
+        y = s.tconv3(y)
+        y = s.tconv4(y)
+        y = nn.functional.interpolate(y, (x.shape[2], x.shape[3]))
+        y = s.out(y)
+        return y
+
+def sobel_kernel():
+    s = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
+    s = [s.rot90(i).unsqueeze(0) for i in range(4)]
+    s = torch.cat(s, 0).unsqueeze(1)
+    return torch.cat([s, s, s], 1).float()
+    
+
+# Model 5, but with sobel preprocess
+class SegModel7(nn.Module):
+    def __init__(s):
+        super().__init__()
+        s.sobel = sobel_kernel()
+        s.conv1 = nn.Conv2d(7, 96, 11, stride=4)
+        s.pool1 = nn.MaxPool2d(3, stride=2)
+        s.conv2 = nn.Conv2d(96, 256, 5, padding=2)
+        s.pool2 = nn.MaxPool2d(3, stride=2)
+        s.conv3 = nn.Conv2d(256, 384, 3, padding=1)
+        s.conv4 = nn.Conv2d(384, 384, 3, padding=1)
+        s.conv5 = nn.Conv2d(384, 256, 3, padding=1)
+        s.pool5 = nn.MaxPool2d(3, stride=2)
+        s.tconv1 = nn.ConvTranspose2d(256, 1, 3, stride=2)
+        s.tconv2 = nn.ConvTranspose2d(1, 1, 3, stride=2)
+        s.tconv3 = nn.ConvTranspose2d(1, 1, 3, stride=2)
+        s.tconv4 = nn.ConvTranspose2d(1, 1, 11, stride=4)
+        s.out = nn.Sigmoid()
+    def forward(s, x):
+        s.sobel = type(x)(s.sobel)
+        y = torch.conv2d(x, s.sobel, padding=1)
+        y = torch.cat([x, y], 1)
+        y = s.conv1(y)
+        y = s.pool1(y)
+        y = s.conv2(y)
+        y = s.pool2(y)
+        y = s.conv3(y)
+        y = s.conv4(y) + y
+        y = s.conv5(y)
+        y = s.pool5(y)
+        y = s.tconv1(y)
+        y = s.tconv2(y)
+        y = s.tconv3(y)
+        y = s.tconv4(y)
+        y = nn.functional.interpolate(y, (x.shape[2], x.shape[3]))
+        y = s.out(y)
+        return y
+
+    def to(s, d):
+        if isinstance(d, torch.device):
+            s.sobel = s.sobel.to(d)
+        return super(SegModel7, s).to(d)
