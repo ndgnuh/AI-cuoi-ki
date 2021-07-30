@@ -15,7 +15,9 @@ def accuracy(yhat, y, threshold=0.7):
         predict == False, truth == False))
     FN = torch.count_nonzero(torch.logical_and(
         predict == False, truth == True))
-    return TP / (TP + 0.5 * (FP + FN)) * 100
+    # return TP / (TP + 0.5 * (FP + FN)) * 100
+    # use jaccard index
+    return 2 * TP/(2 * TP + FN + FP) * 100
 
 
 def main():
@@ -52,8 +54,7 @@ def main():
             optimizer.step()
             if batch % 25 == 0:
                 train_loss, train_current = loss.item(), batch * len(X)
-                print(
-                    f"\tBatch: {batch}, Loss: {train_loss:>7f}  [{train_current:>5d}/{train_size:>5d}]")
+                print(f"\tEpoch: {t}, Batch: {batch}, Loss: {train_loss:>7f}  [{train_current:>5d}/{train_size:>5d}]")
 
         # TEST
         test_loss, correct = 0, 0
@@ -72,7 +73,8 @@ def main():
         # Save model
         if config.model_path is not None:
             torch.save(model, config.model_path)
-            print("Model saved\n")
+            print("Model saved")
+            print("")
         if correct > 0.99:
             break
 
