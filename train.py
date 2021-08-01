@@ -1,5 +1,5 @@
 import torch
-from accuracy_index import iou, accuracy
+from accuracy_index import iou
 from config import parse_args
 
 
@@ -47,7 +47,7 @@ def main():
                 y = y.to(config.device)
                 pred = model(X)
                 test_loss += loss_function(pred, y).item()
-                correct += accuracy(iou, pred, y)
+                correct += iou(pred, y)
         test_loss /= test_num_batches
         correct /= test_size
         print(

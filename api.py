@@ -51,7 +51,7 @@ def mix_bg(model, image, bg, threshold = 0.7, dilation=1, resize=None):
     return result
 
 
-def test_model(model, dataloader, index):
+def test_model(model, dataloader, accfn):
     device = "gpu" if torch.cuda.is_available() else "cpu"
     correct = 0
     model = model.to(device)
@@ -60,6 +60,6 @@ def test_model(model, dataloader, index):
             X = X.to(device)
             y = y.to(device)
             pred = model(X)
-            correct += acc.accuracy(index, pred, y)
-    correct /= len(dataloader.dataset)
-    return correct
+            correct += accfn(pred, y)
+    correct /= len(dataloader)
+    return correct.item()
