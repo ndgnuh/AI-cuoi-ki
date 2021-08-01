@@ -1,6 +1,7 @@
 import torch
 import os
 from torch.utils import data
+from torchvision.transforms import ToTensor
 from PIL import Image
 
 
@@ -8,6 +9,8 @@ class SegmentationData(data.Dataset):
     # Download option does nothing
     # it just there to ensure the method call does has the same attribute
     def __init__(self, datadir, train, download=None, transform=None, target_transform=None):
+        if transform is None:
+            transform = ToTensor()
         if target_transform is None:
             target_transform = transform
         suffix = "train" if train else "test"
