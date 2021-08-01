@@ -1,0 +1,20 @@
+{
+  "model": {
+    "name": "models.DummyModel"
+  },
+  "dataset": {
+    "name": "datasets.SegmentationData",
+    "kwargs": {
+      "datadir": "dataset/Portrait-128/"
+    }
+  },
+  "hyper": {
+    "batch_size": 100,
+    "decay_every": 2,
+    "lr": 1e-4,
+    "end_epoch": 5
+  },
+  "loss": {
+    "name": "loss_functions.IoULoss"
+  }
+}

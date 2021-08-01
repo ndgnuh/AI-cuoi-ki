@@ -1,0 +1,21 @@
+{
+  "model": {
+    "name": "models.SegModel12",
+    "path": "checkpoint/SegModel12.pth"
+  },
+  "dataset": {
+    "name": "datasets.SegmentationData",
+    "kwargs": {
+      "datadir": "dataset/Portrait-128/"
+    }
+  },
+  "hyper": {
+    "batch_size": 100,
+    "decay_every": 15,
+    "lr": 0.001,
+    "end_epoch": 60
+  },
+  "loss": {
+    "name": "loss_functions.DiceBCELoss"
+  }
+}

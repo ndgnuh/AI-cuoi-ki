@@ -1,0 +1,21 @@
+{
+  "model": {
+    "name": "models.SegModel7",
+    "path": "checkpoint/SegModel7-256.pth"
+  },
+  "dataset": {
+    "name": "datasets.SegmentationData",
+    "kwargs": {
+      "datadir": "dataset/Portrait256/"
+    }
+  },
+  "hyper": {
+    "batch_size": 50,
+    "decay_every": 10,
+    "lr": 0.001,
+    "end_epoch": 50
+  },
+  "loss": {
+    "name": "loss_functions.FocalLoss"
+  }
+}

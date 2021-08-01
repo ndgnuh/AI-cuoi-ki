@@ -1,7 +1,36 @@
 import torch.nn as nn
 import torch
-import torch.functional as F
-from functools import reduce, singledispatch
+import torch.nn.functional as F
+
+
+class DummyModel(nn.Module):
+    def __init__(self):
+        super(DummyModel, self).__init__()
+        self.conv = nn.Conv2d(3, 1, 1)
+        self.out = nn.Sigmoid()
+
+    def forward(self, x):
+        y = self.conv(x)
+        y = self.out(y)
+        return y
+
+
+def sobel_kernel():
+    s = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
+    s = [s.rot90(i).unsqueeze(0) for i in range(4)]
+    s = torch.cat(s, 0).unsqueeze(1)
+    s = torch.cat([s, s, s], 1).float()
+    return s
+
+
+def edge_detection_kernel():
+    k1 = torch.tensor([[1, 0, -1], [0, 0, 0], [-1, 0, 1]]).unsqueeze(0)
+    k2 = torch.tensor([[0, -1, 0], [-1, 4, -1], [0, -1, 0]]).unsqueeze(0)
+    k3 = torch.tensor([[-1, -1, -1], [-1, 8, -1], [-1, -1, -1]]).unsqueeze(0)
+    ks = torch.cat([k1, k2, k3], 0).unsqueeze(1)
+    ks = torch.cat([ks, ks, ks], 1).float()
+    return ks
+
 
 class InvertedResidual(nn.Module):
     def __init__(s, i, o, st):
@@ -10,20 +39,21 @@ class InvertedResidual(nn.Module):
 
         s.res = i == o and st == 1
         s.feed = nn.Sequential(
-                nn.Conv2d(i, o, 1),
-                nn.BatchNorm2d(o),
-                nn.ReLU6(inplace=True),
-                nn.Conv2d(o, o, 3, groups=o, padding=1, stride=st),
-                nn.BatchNorm2d(o),
-                nn.ReLU6(inplace=True),
-                nn.Conv2d(o, o, 1),
-                )
+            nn.Conv2d(i, o, 1),
+            nn.BatchNorm2d(o),
+            nn.ReLU6(inplace=True),
+            nn.Conv2d(o, o, 3, groups=o, padding=1, stride=st),
+            nn.BatchNorm2d(o),
+            nn.ReLU6(inplace=True),
+            nn.Conv2d(o, o, 1),
+        )
 
     def forward(s, x):
         if s.res:
             return x + s.feed(x)
         else:
             return s.feed(x)
+
 
 class MobileNet(nn.Module):
     def __init__(self):
@@ -34,7 +64,7 @@ class MobileNet(nn.Module):
             [24, 24, 1],
             [24, 32, 1],
             [32, 32, 1],
-            ]
+        ]
         layers = []
         for (i, o, st) in settings:
             layers.append(InvertedResidual(i, o, st))
@@ -43,72 +73,10 @@ class MobileNet(nn.Module):
             nn.Sigmoid()
         ])
         self.feed = nn.Sequential(*layers)
-            
+
     def forward(s, x):
         return s.feed(x)
 
-class FCN8(nn.Module):
-
-    def __init__(self, numclass = 1):
-        self.__cepoch = 0
-        super(FCN8, self).__init__()
-        self.conv11 = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, padding=1)
-        self.conv12 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1)
-        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
-
-        self.conv21 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1)
-        self.conv22 = nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1)
-        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
-
-        self.conv31 = nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1)
-        self.conv32 = nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1)
-        self.conv33 = nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1)
-        self.pool3 = nn.MaxPool2d(kernel_size=2, stride=2)
-
-        self.conv41 = nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=1)
-        self.conv42 = nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1)
-        self.conv43 = nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1)
-        self.pool4 = nn.MaxPool2d(kernel_size=2, stride=2, padding=1)
-
-        self.conv51 = nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1)
-        self.conv52 = nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1)
-        self.conv53 = nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1)
-        self.pool5 = nn.MaxPool2d(kernel_size=2, stride=2)
-
-        self.conv6 = nn.Conv2d(in_channels=512, out_channels=4096, kernel_size=7, padding=3)
-        self.dropout1 = nn.Dropout(0.85)
-
-        self.conv7 = nn.Conv2d(in_channels=4096, out_channels=4096, kernel_size=1)
-        self.dropout2 = nn.Dropout(0.85)
-
-        self.conv8 = nn.Conv2d(in_channels=4096, out_channels=numclass, kernel_size=1)
-
-        self.tranconv1 = nn.ConvTranspose2d(in_channels=numclass, out_channels=512, kernel_size=4, stride=2)
-
-        self.tranconv2 = nn.ConvTranspose2d(in_channels=512, out_channels=256, kernel_size=4, stride=2, padding=2, output_padding=1)
-
-        self.tranconv3 = nn.ConvTranspose2d(in_channels=256, out_channels=numclass, kernel_size=16, stride=8, padding=4)
-
-    def set_cepoch(self, ce):
-        self.__cepoch = ce
-
-    def forward(self, x):
-        x = self.conv12(self.conv11(x))
-        x = self.pool1(x)
-        x = self.pool2(self.conv22(self.conv21(x)))
-        x1 = self.pool3(self.conv33(self.conv32(self.conv31(x))))
-        x2 = self.pool4(self.conv43(self.conv42(self.conv41(x1))))
-        x = self.pool5(self.conv53(self.conv52(self.conv51(x2))))
-        x = self.dropout1(self.conv6(x))
-        x = self.dropout2(self.conv7(x))
-        x = self.conv8(x)
-        x = self.tranconv1(x)
-        print(x.shape, x2.shape)
-        x = x2 + x
-        x = self.tranconv2(x)
-        x = x1 + x
-        x = self.tranconv3(x)
-        return x
 
 class FCN(nn.Module):
     def __init__(self, in_channel=3, out_channel=1):
@@ -376,6 +344,8 @@ class SegModel4(nn.Module):
         return y
 
 # Based on alex net
+
+
 class SegModel5(nn.Module):
     def __init__(s):
         super().__init__()
@@ -408,6 +378,8 @@ class SegModel5(nn.Module):
 
 # Model 5 but add ReLu and BatchNorm
 # and the tconv are 3 channels
+
+
 class SegModel6(nn.Module):
     def __init__(s):
         super().__init__()
@@ -457,18 +429,28 @@ class SegModel6(nn.Module):
         y = s.out(y)
         return y
 
-def sobel_kernel():
-    s = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
-    s = [s.rot90(i).unsqueeze(0) for i in range(4)]
-    s = torch.cat(s, 0).unsqueeze(1)
-    return torch.cat([s, s, s], 1).float()
-    
+
+class FixedConv2d(nn.Module):
+    # Fixed kernel convolution layer
+    def __init__(s, k, *args, **kwargs):
+        super(FixedConv2d, s).__init__()
+        s.kernel = k
+        s.args = args
+        s.kwargs = kwargs
+
+    def forward(s, x):
+        # use type field to compare string instead of two object
+        if s.kernel.device.type != x.device.type:
+            s.kernel = s.kernel.to(x.device)
+        return torch.conv2d(x, s.kernel, *s.args, **s.kwargs)
 
 # Model 5, but with sobel preprocess
+
+
 class SegModel7(nn.Module):
     def __init__(s):
         super().__init__()
-        s.sobel = sobel_kernel()
+        s.sobel = FixedConv2d(sobel_kernel(), padding=1)
         s.conv1 = nn.Conv2d(7, 96, 11, stride=4)
         s.pool1 = nn.MaxPool2d(3, stride=2)
         s.conv2 = nn.Conv2d(96, 256, 5, padding=2)
@@ -482,9 +464,9 @@ class SegModel7(nn.Module):
         s.tconv3 = nn.ConvTranspose2d(1, 1, 3, stride=2)
         s.tconv4 = nn.ConvTranspose2d(1, 1, 11, stride=4)
         s.out = nn.Sigmoid()
+
     def forward(s, x):
-        s.sobel = type(x)(s.sobel)
-        y = torch.conv2d(x, s.sobel, padding=1)
+        y = s.sobel(x)
         y = torch.cat([x, y], 1)
         y = s.conv1(y)
         y = s.pool1(y)
@@ -502,7 +484,324 @@ class SegModel7(nn.Module):
         y = s.out(y)
         return y
 
-    def to(s, d):
-        if isinstance(d, torch.device):
-            s.sobel = s.sobel.to(d)
-        return super(SegModel7, s).to(d)
+#     def to(s, d):
+#         if isinstance(d, torch.device):
+#             s.sobel = s.sobel.to(d)
+#         return super(SegModel7, s).to(d)
+
+
+class ResidualBlock(nn.Module):
+    def __init__(s, i, n):
+        super().__init__()
+        s.conv1 = nn.Conv2d(i, n, 3, padding=1)
+        s.bn1 = nn.BatchNorm2d(n)
+        s.relu1 = nn.ReLU(inplace=True)
+        s.conv2 = nn.Conv2d(n, n, 3, padding=1, groups=n)
+        s.bn2 = nn.BatchNorm2d(n)
+        if i != n:
+            s.conv_skip = nn.Conv2d(i, n, 1)
+            s.has_conv1x1 = True
+        else:
+            s.has_conv1x1 = False
+
+    def forward(s, x):
+        y = s.conv1(x)
+        y = s.bn1(y)
+        y = s.relu1(y)
+        y = s.conv2(y)
+        y = s.bn2(y)
+        if s.has_conv1x1:
+            y = y + s.conv_skip(x)
+        else:
+            y = y + x
+        return y
+
+# Use more residual,
+# leverage stride for lighter computation
+
+
+class SegModel8(nn.Module):
+    def __init__(s):
+        super(SegModel8, s).__init__()
+        s.conv1 = nn.Conv2d(3, 64, 7, stride=2)
+        s.pool1 = nn.AvgPool2d(2)
+        s.resi1 = ResidualBlock(64, 128)
+
+        s.conv2 = nn.Conv2d(128, 128, 3, dilation=2)
+        s.pool2 = nn.AvgPool2d(2)
+        s.resi2 = ResidualBlock(128, 256)
+
+        s.conv3 = nn.Conv2d(256, 256, 3, dilation=4)
+        s.pool3 = nn.AvgPool2d(2)
+        s.resi3 = ResidualBlock(256, 64)
+
+        s.tconv1 = nn.ConvTranspose2d(64, 1, 4, stride=4)
+        s.tconv2 = nn.ConvTranspose2d(1, 1, 8, stride=2)
+        s.tconv3 = nn.ConvTranspose2d(1, 1, 7, stride=2)
+
+        s.out = nn.Sigmoid()
+
+    def forward(s, x):
+        y = s.conv1(x)
+        y = s.pool1(y)
+        y = s.resi1(y)
+        y = s.conv2(y)
+        y = s.pool2(y)
+        y = s.resi2(y)
+        y = s.conv3(y)
+        y = s.pool3(y)
+        y = s.resi3(y)
+        y = s.tconv1(y)
+        y = s.tconv2(y)
+        y = s.tconv3(y)
+        y = F.interpolate(y, (x.shape[2], x.shape[3]), mode='bilinear')
+        y = s.out(y)
+        return y
+
+
+# Like model 8, adding the sobel kernel
+class SegModel9(nn.Module):
+    def __init__(s):
+        super(SegModel9, s).__init__()
+        s.sobel = FixedConv2d(sobel_kernel(), padding=1)
+
+        s.conv1 = nn.Conv2d(7, 64, 7, stride=2)
+        s.pool1 = nn.AvgPool2d(2)
+        s.resi1 = ResidualBlock(64, 128)
+
+        s.conv2 = nn.Conv2d(128, 128, 3, dilation=2)
+        s.pool2 = nn.AvgPool2d(2)
+        s.resi2 = ResidualBlock(128, 256)
+
+        s.conv3 = nn.Conv2d(256, 256, 3, dilation=4)
+        s.pool3 = nn.AvgPool2d(2)
+        s.resi3 = ResidualBlock(256, 64)
+
+        s.tconv1 = nn.ConvTranspose2d(64, 1, 4, stride=4)
+        s.tconv2 = nn.ConvTranspose2d(1, 1, 8, stride=2)
+        s.tconv3 = nn.ConvTranspose2d(1, 1, 7, stride=2)
+
+        s.out = nn.Sigmoid()
+
+    def forward(s, x):
+        y = s.sobel(x)
+        y = torch.cat([x, y], 1)
+        y = s.conv1(y)
+        y = s.pool1(y)
+        y = s.resi1(y)
+        y = s.conv2(y)
+        y = s.pool2(y)
+        y = s.resi2(y)
+        y = s.conv3(y)
+        y = s.pool3(y)
+        y = s.resi3(y)
+        y = s.tconv1(y)
+        y = s.tconv2(y)
+        y = s.tconv3(y)
+        y = F.interpolate(y, (x.shape[2], x.shape[3]), mode='bilinear')
+        y = s.out(y)
+        return y
+
+# Just mix a bunch of stuffs
+# After experimenting, this is a failed one
+
+
+class SegModel10(nn.Module):
+    def __init__(self):
+        super(SegModel10, self).__init__()
+        # Reduce the size
+        self.conv1 = nn.Conv2d(3, 64, 7, dilation=5, stride=2)
+        self.conv2 = nn.Conv2d(64, 128, 5, dilation=4, stride=2)
+        self.conv3 = nn.Conv2d(128, 128, 3, dilation=3, stride=2)
+        self.pool1 = nn.AvgPool2d(2, stride=2)
+        self.bn1 = nn.BatchNorm2d(128)
+        self.relu1 = nn.ReLU(inplace=True)
+
+        # Squeeze
+        self.conv5 = nn.Conv2d(128, 64, 3, padding=1)
+        self.pool2x = nn.AvgPool2d((2, 1))
+        self.pool2y = nn.AvgPool2d((1, 2))
+        self.tconv1 = nn.ConvTranspose2d(64, 64, 4, stride=2)
+        self.conv6 = nn.Conv2d(64, 64, 3, padding=1)
+
+        self.lin1 = nn.Conv2d(64, 64, 1)
+        self.lin2 = nn.Conv2d(64, 64, 1)
+        self.lin3 = nn.Conv2d(64, 64, 1)
+
+        self.conv6 = nn.Conv2d(64, 64, 1)
+        self.bn3 = nn.BatchNorm2d(128)
+        self.conv7 = nn.Conv2d(128, 1, 1)
+        self.sigmoid = nn.Sigmoid()
+
+        self.pool_x4 = nn.MaxPool2d((4, 1), stride=2)
+        self.pool_y4 = nn.MaxPool2d((1, 4), stride=2)
+
+    def forward(self, x):
+        y = self.conv1(x)
+        y = self.conv2(y)
+        y = self.conv3(y)
+        y = self.pool1(y)
+        y = self.bn1(y)
+        y = self.relu1(y)
+
+        y = self.conv5(y)
+        y_orig = y
+        while y.shape[2] > 1 and y.shape[3] > 1:
+            if y.shape[3] > 1:
+                y = self.pool2x(y)
+            if y.shape[3] > 1:
+                y = self.pool2y(y)
+        y = self.lin3(self.lin2(self.lin1(y)))
+        y = self.tconv1(y)
+        y = F.interpolate(y, (y_orig.shape[2], y_orig.shape[3]))
+        y = torch.cat([self.conv6(y_orig), y], 1)
+
+        # Rescale
+        y = self.bn3(y)
+        y = self.conv7(y)
+        y = F.interpolate(y, (x.shape[2], x.shape[3]))
+        y = self.sigmoid(y)
+        return y
+
+
+class SqueezeBlock(nn.Module):
+    def __init__(self, exp_size, divide=4.0):
+        super(SqueezeBlock, self).__init__()
+        if divide > 1:
+            self.dense = nn.Sequential(
+                nn.Linear(exp_size, int(exp_size / divide)),
+                nn.PReLU(int(exp_size / divide)),
+                nn.Linear(int(exp_size / divide), exp_size),
+                nn.PReLU(exp_size),
+            )
+        else:
+            self.dense = nn.Sequential(
+                nn.Linear(exp_size, exp_size),
+                nn.PReLU(exp_size)
+            )
+
+    def forward(self, x):
+        batch, channels, height, width = x.size()
+        y = F.avg_pool2d(x, kernel_size=[height, width]).view(batch, -1)
+        y = self.dense(y)
+        y = y.view(batch, channels, 1, 1)
+        return y
+
+
+class SegModel11(nn.Module):
+    def __init__(s):
+        super(SegModel11, s).__init__()
+        s.conv1 = nn.Conv2d(3, 64, 3, stride=2)
+        s.pool1 = nn.AvgPool2d(2)
+
+        s.conv2 = nn.Conv2d(64, 128, 3, stride=2)
+        s.pool2 = nn.AvgPool2d(2)
+
+        s.bnrelu = nn.Sequential(
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True))
+
+        s.conv3 = nn.Conv2d(128, 256, 5, padding=1)
+        s.conv4 = nn.Conv2d(256, 512, 3, padding=1)
+        s.conv5 = nn.Conv2d(512, 1024, 3, padding=1)
+
+        s.tconv1 = nn.ConvTranspose2d(1024, 256, 4, stride=2)
+        s.tconv2 = nn.ConvTranspose2d(256, 64, 4, stride=2)
+        s.tconv3 = nn.ConvTranspose2d(64, 64, 4, stride=2)
+
+        s.sqz = SqueezeBlock(64, divide=1)
+        s.sqz_tconv1 = nn.ConvTranspose2d(64, 64, 11, stride=4)
+        s.sqz_tconv2 = nn.ConvTranspose2d(64, 64, 7, stride=3)
+        s.sqz_bn = nn.BatchNorm2d(64)
+        s.out = nn.Sigmoid()
+
+    def forward(s, x):
+        y = s.conv1(x)
+        y = s.pool1(y)
+        y1 = y
+
+        y_sq = s.sqz(y)
+        y_sq = s.sqz_tconv1(y_sq)
+        y_sq = s.sqz_tconv2(y_sq)
+        y_sq = s.sqz_bn(y_sq)
+
+        y = s.conv2(y)
+        y = s.pool2(y)
+        y = s.bnrelu(y)
+
+        y = s.conv3(y)
+        y = s.conv4(y)
+        y = s.conv5(y)
+
+        y = s.tconv1(y)
+        y = s.tconv2(y)
+        y = y1 + F.interpolate(y, y1.shape[2:])
+        y = y + torch.multiply(y, F.interpolate(y_sq, y.shape[2:]))
+        y = s.tconv3(y)
+        y = F.interpolate(y, x.shape[2:])
+        y = torch.sum(y, 1).unsqueeze(1)
+        y = s.out(y)
+        return y
+
+
+class SegModel12(nn.Module):
+    def __init__(s):
+        super(SegModel12, s).__init__()
+        s.sobel = FixedConv2d(sobel_kernel(), padding=1)
+        s.edges = FixedConv2d(edge_detection_kernel(), padding=1)
+
+        s.conv1 = nn.Conv2d(10, 64, 3, stride=2)
+        s.pool1 = nn.AvgPool2d(2)
+
+        s.conv2 = nn.Conv2d(64, 128, 3, stride=2)
+        s.pool2 = nn.AvgPool2d(2)
+
+        s.bnrelu = nn.Sequential(
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True))
+
+        s.conv3 = nn.Conv2d(128, 256, 5, padding=1)
+        s.conv4 = nn.Conv2d(256, 512, 3, padding=1)
+        s.conv5 = nn.Conv2d(512, 1024, 3, padding=1)
+
+        s.tconv1 = nn.ConvTranspose2d(1024, 256, 4, stride=2)
+        s.tconv2 = nn.ConvTranspose2d(256, 64, 4, stride=2)
+        s.tconv3 = nn.ConvTranspose2d(64, 64, 4, stride=2)
+
+        s.sqz = SqueezeBlock(64, divide=1)
+        s.sqz_tconv1 = nn.ConvTranspose2d(64, 64, 11, stride=4)
+        s.sqz_tconv2 = nn.ConvTranspose2d(64, 64, 7, stride=3)
+        s.sqz_bn = nn.BatchNorm2d(64)
+        s.out = nn.Sigmoid()
+
+    def forward(s, x):
+        sobel = s.sobel(x)
+        edges = s.edges(x)
+        y = torch.cat([x, sobel, edges], 1)
+
+        y = s.conv1(y)
+        y = s.pool1(y)
+        y1 = y
+
+        y_sq = s.sqz(y)
+        y_sq = s.sqz_tconv1(y_sq)
+        y_sq = s.sqz_tconv2(y_sq)
+        y_sq = s.sqz_bn(y_sq)
+
+        y = s.conv2(y)
+        y = s.pool2(y)
+        y = s.bnrelu(y)
+
+        y = s.conv3(y)
+        y = s.conv4(y)
+        y = s.conv5(y)
+
+        y = s.tconv1(y)
+        y = s.tconv2(y)
+        y = y1 + F.interpolate(y, y1.shape[2:])
+        y = y + torch.multiply(y, F.interpolate(y_sq, y.shape[2:]))
+        y = s.tconv3(y)
+        y = F.interpolate(y, x.shape[2:])
+        y = torch.sum(y, 1).unsqueeze(1)
+        y = s.out(y)
+        return y
