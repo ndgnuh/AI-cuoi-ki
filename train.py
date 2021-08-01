@@ -1,23 +1,6 @@
 import torch
-import numpy as np
-from torch import nn
-from torch import optim
+from accuracy_index import iou, accuracy
 from config import parse_args
-
-
-def accuracy(yhat, y, threshold=0.7):
-    predict = yhat >= threshold
-    truth = y >= threshold
-    TP = torch.count_nonzero(torch.logical_and(predict == True, truth == True))
-    FP = torch.count_nonzero(torch.logical_and(
-        predict == True, truth == False))
-    TN = torch.count_nonzero(torch.logical_and(
-        predict == False, truth == False))
-    FN = torch.count_nonzero(torch.logical_and(
-        predict == False, truth == True))
-    # return TP / (TP + 0.5 * (FP + FN)) * 100
-    # use jaccard index
-    return 2 * TP/(2 * TP + FN + FP) * 100
 
 
 def main():
@@ -64,7 +47,7 @@ def main():
                 y = y.to(config.device)
                 pred = model(X)
                 test_loss += loss_function(pred, y).item()
-                correct += accuracy(pred, y)
+                correct += accuracy(iou, pred, y)
         test_loss /= test_num_batches
         correct /= test_size
         print(
@@ -75,8 +58,6 @@ def main():
             torch.save(model, config.model_path)
             print("Model saved")
             print("")
-        if correct > 0.99:
-            break
 
 
 if __name__ == '__main__':
