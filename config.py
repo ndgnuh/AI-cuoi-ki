@@ -110,9 +110,9 @@ def parse_args(args=None):
     optimizer = import_and_initialize(
         j, "optimizer", model.parameters(), lr=lr)
 
-    loss_function = import_and_initialize(j, "loss")
+    loss_function = import_(get(j, "loss/name", "torch.nn.BCELoss"))
     if isinstance(loss_function, type):
-        loss_function = loss_function()
+        loss_function = import_and_initialize(j, "loss")
 
     # hyper parameter stuffs
 
@@ -127,7 +127,7 @@ def parse_args(args=None):
         batch_size=batch_size,
         decay_every=get(j, "hyper/decay_every", 30),
         decay_rate=get(j, "hyper/decay_rate", 0.1),
-        start_epoch=get(j, "hyper/start_epoch", 0),
+        start_epoch=get(j, "hyper/start_epoch", 1),
         end_epoch=get(j, "hyper/end_epoch", 1000),
         loss_function=loss_function,
     )
