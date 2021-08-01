@@ -69,23 +69,25 @@ def parse_args(args=None):
     with open(args.config_file) as io:
         j = json.load(io)
 
-    # Import model from config
-    model_path = get(j, "model/path", None)
-    if model_path is not None and os.path.isfile(model_path):
-        pprint(f"Loading model from {model_path}")
-        model = torch.load(model_path)
-    else:
-        Model = import_(j["model"]["name"])
-        model_args = get(j, "model/args", [])
-        model_kwargs = get(j, "model/kwargs", {})
-        model = Model(*model_args, **model_kwargs)
-
+    # Device
     if "device" in j["model"]:
         device = torch.device(j["model"]["device"])
     elif torch.cuda.is_available():
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
+
+    # Import model from config
+    model_path = get(j, "model/path", None)
+    if model_path is not None and os.path.isfile(model_path):
+        pprint(f"Loading model from {model_path}")
+        model = torch.load(model_path, map_location=device)
+    else:
+        Model = import_(j["model"]["name"])
+        model_args = get(j, "model/args", [])
+        model_kwargs = get(j, "model/kwargs", {})
+        model = Model(*model_args, **model_kwargs)
+
     model = model.to(device)
 
     # Hyper params
@@ -131,7 +133,6 @@ def parse_args(args=None):
         end_epoch=get(j, "hyper/end_epoch", 1000),
         loss_function=loss_function,
     )
-    pprint(config)
     return config
 
 
