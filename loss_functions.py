@@ -1,7 +1,13 @@
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
-import torchvision.ops as visionops
+
+
+class CrossEntropyLoss2d(nn.Module):
+    def forward(self, yhat, y):
+        log_hat = torch.log2(yhat)
+        loss = -torch.mean(torch.multiply(y, log_hat))
+        return loss
 
 class DiceLoss(nn.Module):
     def __init__(self, weight=None, size_average=True):
@@ -114,3 +120,63 @@ class ComboLoss(nn.Module):
         combo = (CE_RATIO * weighted_ce) - ((1 - CE_RATIO) * dice)
         
         return combo
+
+
+# A kind of surface loss
+# ported from
+# https://viblo.asia/p/image-segmentation-sinet-extreme-lightweight-portrait-segmentation-sinet-paper-explaination-and-coding-implementation-ORNZq1MeZ0n#_63-loss-function-23
+class SINetLoss(nn.Module):
+    def __init__(self, ld=0.9):
+        super(SINetLoss, self).__init__()
+        self.ld = ld
+        self.loss = nn.BCELoss()
+
+    def dilation(self, y):
+        y = F.max_pool2d(y, 15, padding=7, stride=1)
+        return y
+
+    def erosion(self, y):
+        y = -F.max_pool2d(-y, 15, padding=7, stride=1)
+        return y
+
+    def boundary(self, y):
+        return self.dilation(y) - self.erosion(y)
+
+    def boundary_loss(self, ypred, y):
+        loss = self.loss(self.boundary(ypred), self.boundary(y))
+        return loss
+
+    def forward(self, ypred, y):
+        loss = self.loss(ypred, y)
+        bd_loss = self.boundary_loss(ypred, y)
+        loss = self.ld * bd_loss + loss
+        # Multiply by batchsize, this is not in the original loss
+        # loss = loss * y.shape[0]
+        return loss
+
+
+# Get the boundary of the mask
+def boundary(mask, k=20):
+    d = F.max_pool2d(mask, k, padding=k//2, stride=1)
+    e = -F.max_pool2d(-mask, k, padding=k//2, stride=1)
+    return d-e
+
+
+class BDDiceBCELoss(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super(BDDiceBCELoss, self).__init__()
+        self.loss = DiceBCELoss(*args, **kwargs)
+
+    def forward(self, inputs, targets):
+        b_inputs = boundary(inputs)
+        b_targets = boundary(targets)
+        return self.loss(b_inputs, b_targets) + self.loss(inputs, targets)
+
+
+class SurfaceLoss():
+    def __call__(self, probs, dist_maps):
+        pc = probs.type(torch.float32)
+        dc = dist_maps.type(torch.float32)
+        multipled = torch.einsum("bkwh,bkwh->bkwh", pc, dc)
+        loss = multipled.mean()
+        return loss

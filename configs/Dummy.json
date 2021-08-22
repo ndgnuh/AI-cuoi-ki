@@ -5,7 +5,7 @@
   "dataset": {
     "name": "datasets.SegmentationData",
     "kwargs": {
-      "datadir": "dataset/Portrait-128/"
+      "datadir": "dataset/BaiduV2/"
     }
   },
   "hyper": {
@@ -15,6 +15,6 @@
     "end_epoch": 5
   },
   "loss": {
-    "name": "loss_functions.IoULoss"
+    "name": "loss_functions.SINetLoss"
   }
 }

@@ -39,7 +39,8 @@ def mix_bg(model, image, bg, threshold = 0.7, dilation=1, resize=None):
     mask = tensor_to_image(mask).astype(np.uint8)
     oldshape = mask.shape
 
-    mask = cv2.resize(mask, (img.shape[1], img.shape[0]))
+    if resize is not None:
+        mask = cv2.resize(mask, (img.shape[1], img.shape[0]))
     if dilation > 0:
         mask = cv2.dilate(mask, np.ones((dilation, dilation), np.uint8), iterations=1)
     mask = cv2.blur(mask, (30, 30))

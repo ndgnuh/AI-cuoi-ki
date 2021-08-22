@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from accuracy_index import iou
 from config import parse_args
 
@@ -14,9 +15,9 @@ def main():
     # Start training
     lr = optimizer.param_groups[0]["lr"]
     train_size = len(train_data.dataset)
-    test_size = len(test_data.dataset)
+    train_log_throttle = len(train_data) // 5
     test_num_batches = len(test_data)
-    print(len(train_data))
+    accuracies = []
     for t in range(config.start_epoch - 1, config.end_epoch):
         print(f"Epoch {t + 1}")
 
@@ -35,7 +36,7 @@ def main():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            if batch % 25 == 0:
+            if batch % train_log_throttle == 0:
                 train_loss, train_current = loss.item(), batch * len(X)
                 print(f"\tEpoch: {t}, Batch: {batch}, Loss: {train_loss:>7f}  [{train_current:>5d}/{train_size:>5d}]")
 
@@ -49,9 +50,10 @@ def main():
                 test_loss += loss_function(pred, y).item()
                 correct += iou(pred, y)
         test_loss /= test_num_batches
-        correct /= test_size
-        print(
-            f"Test:\tAccuracy: {(100*correct):>0.1f}%\t\tAvg loss: {test_loss:>8f}")
+        correct /= test_num_batches
+        accuracies.append(correct)
+        print("Test:")
+        print(f"\tAccuracy: {(100*correct):>6.2f}%\tAvg loss: {test_loss:>8f}")
 
         # Save model
         if config.model_path is not None:

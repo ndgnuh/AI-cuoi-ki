@@ -1,7 +1,8 @@
 {
   "model": {
-    "name": "models.SegModel1",
-    "path": "checkpoint/SegModel1-FocalLoss.pth"
+    "name": "models.SegModel15",
+    "path": "checkpoint/SegModel15-64.pth",
+    "args": [64]
   },
   "dataset": {
     "name": "datasets.SegmentationData",
@@ -12,9 +13,10 @@
   "hyper": {
     "batch_size": 100,
     "decay_every": 15,
-    "lr": 0.00095
+    "lr": 0.001,
+    "end_epoch": 60
   },
   "loss": {
-    "name": "loss_functions.FocalLoss"
+    "name": "loss_functions.DiceBCELoss"
   }
 }

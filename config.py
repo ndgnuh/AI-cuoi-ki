@@ -79,14 +79,14 @@ def parse_args(args=None):
 
     # Import model from config
     model_path = get(j, "model/path", None)
+    Model = import_(j["model"]["name"])
+    model_args = get(j, "model/args", [])
+    model_kwargs = get(j, "model/kwargs", {})
+    model = Model(*model_args, **model_kwargs)
     if model_path is not None and os.path.isfile(model_path):
         pprint(f"Loading model from {model_path}")
-        model = torch.load(model_path, map_location=device)
-    else:
-        Model = import_(j["model"]["name"])
-        model_args = get(j, "model/args", [])
-        model_kwargs = get(j, "model/kwargs", {})
-        model = Model(*model_args, **model_kwargs)
+        model.load_state_dict(
+                torch.load(model_path, map_location=device).state_dict())
 
     model = model.to(device)
 

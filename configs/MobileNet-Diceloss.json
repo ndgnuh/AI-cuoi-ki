@@ -1,20 +1,20 @@
 {
   "model": {
-    "name": "models.SegModel1",
-    "path": "checkpoint/SegModel1-FocalLoss.pth"
+    "name": "models.MobileNet",
+    "path": "checkpoint/MobileNet-DiceLoss.pth"
   },
   "dataset": {
     "name": "datasets.SegmentationData",
     "kwargs": {
-      "datadir": "dataset/Portrait-128/"
+      "datadir": "dataset/Portrait-128"
     }
   },
   "hyper": {
     "batch_size": 100,
     "decay_every": 15,
-    "lr": 0.00095
+    "lr": 0.001
   },
   "loss": {
-    "name": "loss_functions.FocalLoss"
+    "name": "loss_functions.DiceLoss"
   }
 }
