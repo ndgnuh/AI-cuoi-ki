@@ -52,6 +52,12 @@ def mix_bg(model, image, bg, threshold = 0.7, dilation=1, resize=None):
     return result
 
 
+def remove_background(model, img, *args, **kwargs):
+    bg = np.ones_like(img)
+    bg = bg * 255
+    return mix_bg(model, img, bg, *args, **kwargs)
+
+
 def test_model(model, dataloader, accfn):
     device = "gpu" if torch.cuda.is_available() else "cpu"
     correct = 0
