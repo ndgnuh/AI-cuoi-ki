@@ -237,7 +237,7 @@ class SegModel1(nn.Module):
         super().__init__()
         s.layers = nn.Sequential(
             nn.Conv2d(3, 32, 3, padding=1),
-            nn.AvgPool2d(2),
+            nn.AvgPool1d(2),
             nn.ReLU(inplace=True),
             nn.ConvTranspose2d(32, 1, 2, stride=2),
             nn.Sigmoid())
@@ -255,7 +255,7 @@ class SegModel2(nn.Module):
         for i in range(nblocks):
             block = nn.Sequential(
                 nn.Conv2d(32, 32, 3, padding=1),
-                nn.AvgPool2d(2),
+                nn.MaxPool2d(2),
                 nn.ReLU(inplace=True)
             )
             setattr(s, f"block{i}", block)
@@ -355,7 +355,7 @@ class SegModel4(nn.Module):
                 *[b for b in [
                         nn.Conv2d(c1, c2, 3, padding=1),
                         block,
-                        nn.AvgPool2d(2),
+                        nn.MaxPool2d(2),
                         nn.BatchNorm2d(c2),
                         nn.LeakyReLU(inplace=True),
                         nn.ConvTranspose2d(c2, c1, 2, stride=2)
@@ -563,15 +563,15 @@ class SegModel8(nn.Module):
     def __init__(s):
         super(SegModel8, s).__init__()
         s.conv1 = nn.Conv2d(3, 64, 7, stride=2)
-        s.pool1 = nn.AvgPool2d(2)
+        s.pool1 = nn.MaxPool2d(2)
         s.resi1 = ResidualBlock(64, 128)
 
         s.conv2 = nn.Conv2d(128, 128, 3, dilation=2)
-        s.pool2 = nn.AvgPool2d(2)
+        s.pool2 = nn.MaxPool2d(2)
         s.resi2 = ResidualBlock(128, 256)
 
         s.conv3 = nn.Conv2d(256, 256, 3, dilation=4)
-        s.pool3 = nn.AvgPool2d(2)
+        s.pool3 = nn.MaxPool2d(2)
         s.resi3 = ResidualBlock(256, 64)
 
         s.tconv1 = nn.ConvTranspose2d(64, 1, 4, stride=4)
@@ -605,15 +605,15 @@ class SegModel9(nn.Module):
         s.sobel = FixedConv2d(sobel_kernel(), padding=1)
 
         s.conv1 = nn.Conv2d(7, 64, 7, stride=2)
-        s.pool1 = nn.AvgPool2d(2)
+        s.pool1 = nn.MaxPool2d(2)
         s.resi1 = ResidualBlock(64, 128)
 
         s.conv2 = nn.Conv2d(128, 128, 3, dilation=2)
-        s.pool2 = nn.AvgPool2d(2)
+        s.pool2 = nn.MaxPool2d(2)
         s.resi2 = ResidualBlock(128, 256)
 
         s.conv3 = nn.Conv2d(256, 256, 3, dilation=4)
-        s.pool3 = nn.AvgPool2d(2)
+        s.pool3 = nn.MaxPool2d(2)
         s.resi3 = ResidualBlock(256, 64)
 
         s.tconv1 = nn.ConvTranspose2d(64, 1, 4, stride=4)
@@ -652,14 +652,14 @@ class SegModel10(nn.Module):
         self.conv1 = nn.Conv2d(3, 64, 7, dilation=5, stride=2)
         self.conv2 = nn.Conv2d(64, 128, 5, dilation=4, stride=2)
         self.conv3 = nn.Conv2d(128, 128, 3, dilation=3, stride=2)
-        self.pool1 = nn.AvgPool2d(2, stride=2)
+        self.pool1 = nn.MaxPool2d(2, stride=2)
         self.bn1 = nn.BatchNorm2d(128)
         self.relu1 = nn.ReLU(inplace=True)
 
         # Squeeze
         self.conv5 = nn.Conv2d(128, 64, 3, padding=1)
-        self.pool2x = nn.AvgPool2d((2, 1))
-        self.pool2y = nn.AvgPool2d((1, 2))
+        self.pool2x = nn.MaxPool2d((2, 1))
+        self.pool2y = nn.MaxPool2d((1, 2))
         self.tconv1 = nn.ConvTranspose2d(64, 64, 4, stride=2)
         self.conv6 = nn.Conv2d(64, 64, 3, padding=1)
 
@@ -732,10 +732,10 @@ class SegModel11(nn.Module):
     def __init__(s):
         super(SegModel11, s).__init__()
         s.conv1 = nn.Conv2d(3, 64, 3, stride=2)
-        s.pool1 = nn.AvgPool2d(2)
+        s.pool1 = nn.MaxPool2d(2)
 
         s.conv2 = nn.Conv2d(64, 128, 3, stride=2)
-        s.pool2 = nn.AvgPool2d(2)
+        s.pool2 = nn.MaxPool2d(2)
 
         s.bnrelu = nn.Sequential(
             nn.BatchNorm2d(128),
@@ -805,10 +805,10 @@ class SegModel12(nn.Module):
         s.edges = FixedConv2d(edge_detection_kernel(), padding=1)
 
         s.conv1 = nn.Conv2d(10, 64, 3, stride=2)
-        s.pool1 = nn.AvgPool2d(2)
+        s.pool1 = nn.MaxPool2d(2)
 
         s.conv2 = nn.Conv2d(64, 128, 3, stride=2)
-        s.pool2 = nn.AvgPool2d(2)
+        s.pool2 = nn.MaxPool2d(2)
 
         s.bnrelu = nn.Sequential(
             nn.BatchNorm2d(128),
@@ -876,7 +876,7 @@ class SegModel13(nn.Module):
                 conv = nn.Conv2d(3, channels[i], 7, padding=3)
             else:
                 conv = nn.Conv2d(channels[i - 1], channels[i], 3, padding=1)
-            pool = nn.AdaptiveAvgPool2d(size)
+            pool = nn.AdaptiveMaxPool2d(size)
             sq = SqueezeBlock(channels[i], 1)
             ex = nn.Conv2d(channels[i], channels[i], 1)
             bn = nn.BatchNorm2d(channels[i])
@@ -1037,7 +1037,7 @@ class SegModel15(nn.Module):
 
         for frac in [1, 2, 4, 8]:
             setattr(self, f"pool_1_{frac}",
-                    nn.AdaptiveAvgPool2d(base//frac))
+                    nn.AdaptiveMaxPool2d(base//frac))
         self.conv1 = nn.Conv2d(64, 128, 3, stride=2, padding=1)
         self.conv2 = nn.Conv2d(128, 256, 3, stride=2, padding=1)
         self.conv3 = nn.Conv2d(256, 512, 3, stride=2, padding=1)

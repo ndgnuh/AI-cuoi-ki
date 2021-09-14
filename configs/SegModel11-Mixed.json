@@ -1,0 +1,22 @@
+{
+  "model": {
+    "name": "models.SegModel11Fixed",
+    "path": "checkpoint/SegModel11-MixedData.pth"
+  },
+  "dataset": {
+    "name": "datasets.SegmentationDataWithVal",
+    "kwargs": {
+      "datadir": "dataset/Portrait-128/"
+    }
+  },
+  "hyper": {
+    "batch_size": 100,
+    "decay_every": 15,
+    "decay_rate": 0.5,
+    "lr": 0.0002,
+    "end_epoch": 150
+  },
+  "loss": {
+    "name": "loss_functions.DiceBCELoss"
+  }
+}

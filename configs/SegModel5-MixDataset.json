@@ -1,0 +1,20 @@
+{
+  "model": {
+    "name": "models.SegModel5",
+    "path": "checkpoint/SegModel5.pth"
+  },
+  "dataset": {
+    "name": "datasets.SegmentationDataWithVal",
+    "kwargs": {
+      "datadir": "dataset/Mix"
+    }
+  },
+  "hyper": {
+    "batch_size": 50,
+    "decay_every": 10,
+    "lr": 0.00025
+  },
+  "loss": {
+    "name": "loss_functions.DiceBCELoss"
+  }
+}
