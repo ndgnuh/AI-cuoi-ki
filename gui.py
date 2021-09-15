@@ -12,6 +12,8 @@ gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import GdkPixbuf
 from gi.repository import Gtk
 
+IMG_WIDTH=256
+IMG_HEIGHT=256
 
 def VBox(args):
     args = [a for a in args if a is not None]
@@ -80,7 +82,7 @@ def view_image(path):
     if path is None:
         return None
     else:
-        pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, width=256, height=256, preserve_aspect_ratio=True)
+        pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, width=IMG_WIDTH, height=IMG_HEIGHT, preserve_aspect_ratio=True)
         return Gtk.Image.new_from_pixbuf(pixbuf)
 
 
@@ -101,6 +103,7 @@ def view(model):
     btn_sel_image = Gtk.Button.new_with_label("Select image")
     btn_sel_model = Gtk.Button.new_with_label("Select model")
     btn_run_model = Gtk.Button.new_with_label("Segment")
+    btn_exit = Gtk.Button.new_with_label("Exit")
     # btn_sav_image = Gtk.Button.new_with_label("Save result")
     btn_reset = Gtk.Button.new_with_label("Reset")
     txt_model_name = Gtk.Label(label=model.model_name())
@@ -117,6 +120,8 @@ def view(model):
     btn_sel_model.connect("clicked", fp.partial(
         view_file_picker,
         callback=model.set("model_path")))
+
+    btn_exit.connect("clicked", lambda x: Gtk.main_quit())
 
     def run_segment(_):
         if image_input is None:
@@ -141,6 +146,7 @@ def view(model):
             btn_run_model,
             # btn_sav_image
             btn_reset,
+            btn_exit
         ]),
         VBox([
             HBox([
@@ -164,7 +170,7 @@ def main():
         win.add(view(model))
         win.show_all()
 
-    MainModel(onchange=render)
+    MainModel(onchange=render, model_path="checkpoint/SegModel14.pth")
     win.connect("destroy", Gtk.main_quit)
     win.show_all()
     Gtk.main()
