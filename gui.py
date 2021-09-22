@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from traceback import print_exc
 import cv2
 import os
 import numpy as np
@@ -13,8 +12,10 @@ gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import GdkPixbuf
 from gi.repository import Gtk
 
-IMG_WIDTH=256
-IMG_HEIGHT=256
+
+IMG_WIDTH = 256
+IMG_HEIGHT = 256
+
 
 def VBox(args):
     args = [a for a in args if a is not None]
@@ -60,9 +61,30 @@ class MainModel():
                 setattr(self, attr, v)
         return f
 
+
 def move_to_if_exists(filepicker, path):
     if os.path.isdir(path):
         filepicker.set_current_folder(path)
+
+
+def update_image_preview(dialog):
+    path = dialog.get_preview_filename()
+    try:
+        pixbuf = GdkPixbuf.Pixbuf.new_from_file(path)
+    except Exception:
+        dialog.set_preview_widget_active(False)
+    else:
+        # scale the image
+        maxwidth, maxheight = IMG_WIDTH, IMG_HEIGHT
+        width, height = pixbuf.get_width(), pixbuf.get_height()
+        scale = min(maxwidth/width, maxheight/height)
+        if scale < 1:
+            width, height = int(width*scale), int(height*scale)
+            pixbuf = pixbuf.scale_simple(
+                    width, height,
+                    GdkPixbuf.InterpType.BILINEAR)
+        dialog.preview_image.set_from_pixbuf(pixbuf)
+        dialog.set_preview_widget_active(True)
 
 
 def pick_image(button, callback):
@@ -74,6 +96,9 @@ def pick_image(button, callback):
                 Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
                 Gtk.STOCK_OPEN, Gtk.ResponseType.OK),
             filter=filter)
+    w.preview_image = Gtk.Image()
+    w.set_preview_widget(w.preview_image)
+    w.connect("update-preview", update_image_preview)
 
     move_to_if_exists(w, "images")
     move_to_if_exists(w, "image")
@@ -119,7 +144,11 @@ def view_image(path):
         return None
     else:
         try:
-            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, width=IMG_WIDTH, height=IMG_HEIGHT, preserve_aspect_ratio=True)
+            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
+                    path,
+                    width=IMG_WIDTH,
+                    height=IMG_HEIGHT,
+                    preserve_aspect_ratio=True)
         except Exception as e:
             print("ERROR", e)
             return e
@@ -144,7 +173,6 @@ def load_image(path, sink=None, **kwargs):
     except Exception as e:
         warn(str(e))
         return VBox([])
-
 
 
 @view_image.register(np.ndarray)
@@ -182,6 +210,9 @@ def save(button, image, inputpath):
                 Gtk.STOCK_SAVE, Gtk.ResponseType.ACCEPT,
                 ),
             filter=f)
+    w.preview_image = Gtk.Image()
+    w.set_preview_widget(w.preview_image)
+    w.connect("update-preview", update_image_preview)
 
     w.set_current_folder(os.path.dirname(inputpath))
     outfile = os.path.splitext(os.path.basename(inputpath))
@@ -193,6 +224,7 @@ def save(button, image, inputpath):
         try:
             fn = w.get_filename()
             # if isinstance(image, np.array):
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             cv2.imwrite(fn, image)
             # if isinstance(image, GdkPixbuf.Pixbuf):
             #     pixbuf = image.get_pixbuf()
@@ -200,6 +232,7 @@ def save(button, image, inputpath):
         except Exception as e:
             warn(str(e))
     w.destroy()
+
 
 def view(win, model):
     btn_sel_image = Gtk.Button.new_with_label("Select image")
