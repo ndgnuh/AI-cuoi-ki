@@ -279,8 +279,12 @@ def view(win, model):
     btn_run_model.connect("clicked", run_segment)
 
     def reset(_):
-        model.model_path = None
-        model.image_path = None
+        for k in model.__dict__:
+            if k != "onchange":
+                setattr(model, k, None)
+        # model.image_path = None
+        # model.result = None
+        # model.result_orig = None
     btn_reset.connect("clicked", reset)
 
     if model.image_path is None:
