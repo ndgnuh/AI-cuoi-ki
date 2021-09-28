@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
+import torchvision
 
 
 class HSwish(nn.Module):
@@ -667,7 +668,6 @@ class SegModel10(nn.Module):
         self.lin2 = nn.Conv2d(64, 64, 1)
         self.lin3 = nn.Conv2d(64, 64, 1)
 
-        self.conv6 = nn.Conv2d(64, 64, 1)
         self.bn3 = nn.BatchNorm2d(128)
         self.conv7 = nn.Conv2d(128, 1, 1)
         self.sigmoid = nn.Sigmoid()
@@ -685,15 +685,11 @@ class SegModel10(nn.Module):
 
         y = self.conv5(y)
         y_orig = y
-        while y.shape[2] > 1 and y.shape[3] > 1:
-            if y.shape[3] > 1:
-                y = self.pool2x(y)
-            if y.shape[3] > 1:
-                y = self.pool2y(y)
+        y = F.adaptive_max_pool2d(y, (1, 1))
         y = self.lin3(self.lin2(self.lin1(y)))
+        y = torch.multiply(y_orig, y)
         y = self.tconv1(y)
-        y = F.interpolate(y, (y_orig.shape[2], y_orig.shape[3]))
-        y = torch.cat([self.conv6(y_orig), y], 1)
+        y = torch.cat([F.interpolate(self.conv6(y_orig), y.shape[2:]), y], 1)
 
         # Rescale
         y = self.bn3(y)
@@ -753,7 +749,7 @@ class SegModel11(nn.Module):
         s.sqz_tconv1 = nn.ConvTranspose2d(64, 64, 11, stride=4)
         s.sqz_tconv2 = nn.ConvTranspose2d(64, 64, 7, stride=3)
         s.sqz_bn = nn.BatchNorm2d(64)
-        s.out = nn.Sigmoid()
+        s.out = nn.Hardsigmoid()
 
     def forward(s, x):
         y = s.conv1(x)
@@ -778,8 +774,8 @@ class SegModel11(nn.Module):
         y = y1 + F.interpolate(y, y1.shape[2:])
         y = y + torch.multiply(y, F.interpolate(y_sq, y.shape[2:]))
         y = s.tconv3(y)
-        y = F.interpolate(y, x.shape[2:])
         y = torch.sum(y, 1).unsqueeze(1)
+        y = F.interpolate(y, x.shape[2:])
         y = s.out(y)
         return y
 
@@ -793,8 +789,7 @@ class SegModel11Fixed(nn.Module):
     def forward(self, x):
         y = self.pool(x)
         y = self.layers(y)
-        if y.shape[2] != x.shape[2] and y.shape[3] != x.shape[3]:
-            y = F.interpolate(y, x.shape[2:])
+        y = F.interpolate(y, x.shape[2:])
         return y
 
 
@@ -921,8 +916,8 @@ class SegModel13(nn.Module):
         for i in range(4):
             y = getattr(self, f"tconv{i}")(y)
 
-        y = self.out(y)
         y = F.interpolate(y, x.shape[2:])
+        y = self.out(y)
         return y
 
 
@@ -1000,8 +995,8 @@ class SegModel14(nn.Module):
         y = self.dwconv3(y)
         # # 1
         y = F.max_unpool2d(y, i1, 2)
-        y = self.out(y)
         y = F.interpolate(y, x.shape[2:])
+        y = self.out(y)
         return y
 
 
@@ -1036,8 +1031,11 @@ class SegModel15(nn.Module):
         self.conv_entry = nn.Conv2d(3, 64, 1)
 
         for frac in [1, 2, 4, 8]:
-            setattr(self, f"pool_1_{frac}",
-                    nn.AdaptiveMaxPool2d(base//frac))
+            if isinstance(base, int):
+                pool = nn.AdaptiveMaxPool2d(base//frac)
+            else:
+                pool = nn.AdaptiveMaxPool2d(base[0]//frac, base[1]//frac)
+            setattr(self, f"pool_1_{frac}", pool)
         self.conv1 = nn.Conv2d(64, 128, 3, stride=2, padding=1)
         self.conv2 = nn.Conv2d(128, 256, 3, stride=2, padding=1)
         self.conv3 = nn.Conv2d(256, 512, 3, stride=2, padding=1)
@@ -1316,4 +1314,98 @@ class SegModel18(nn.Module):
         y = self.out_4(y)
         y = F.interpolate(y, x.shape[2:], mode='bilinear')
         y = self.out_5(y)
+        return y
+
+
+# Use mobilenetV3 pretrained encoder
+class SegModel19(nn.Module):
+    def __init__(self):
+        super(SegModel19, self).__init__()
+        m = torchvision.models.mobilenet_v3_small(pretrained=True)
+
+        self.in_pool = nn.AdaptiveMaxPool2d((224, 224))
+
+        # Given 256x144 input
+        # torch.Size([1, 3, 256, 144])
+        # torch.Size([1, 16, 128, 72])
+        # torch.Size([1, 16, 64, 36])
+        # torch.Size([1, 24, 32, 18])
+        # torch.Size([1, 24, 32, 18])
+        # torch.Size([1, 40, 16, 9])
+        # torch.Size([1, 40, 16, 9])
+        # torch.Size([1, 40, 16, 9])
+        # torch.Size([1, 48, 16, 9])
+        # torch.Size([1, 48, 16, 9])
+        # torch.Size([1, 96, 8, 5])
+        # torch.Size([1, 96, 8, 5])
+        # torch.Size([1, 96, 8, 5])
+        # torch.Size([1, 576, 8, 5])
+        self.features = m.features
+
+        for param in self.features.parameters():
+            param.requires_grad = False
+
+        self.tconv_1_2 = nn.Sequential(
+               nn.ConvTranspose2d(16, 16, 2, stride=2),
+               nn.BatchNorm2d(16),
+               nn.Hardswish(inplace=True))
+        self.tconv_1_4 = nn.Sequential(
+               nn.ConvTranspose2d(16, 16, 2, stride=2),
+               nn.BatchNorm2d(16),
+               nn.Hardswish(inplace=True))
+        self.tconv_1_8 = nn.Sequential(
+               nn.ConvTranspose2d(24, 16, 2, stride=2),
+               nn.BatchNorm2d(16),
+               nn.Hardswish(inplace=True))
+        self.tconv_1_16 = nn.Sequential(
+               nn.ConvTranspose2d(48, 24, 2, stride=2),
+               nn.BatchNorm2d(24),
+               nn.Hardswish(inplace=True))
+        self.tconv_1_32 = nn.Sequential(
+                nn.ConvTranspose2d(576, 48, 2, stride=2),
+                nn.BatchNorm2d(48),
+                nn.Hardswish(inplace=True))
+
+        self.se_1_2 = SqueezeBlock(16)
+        self.se_1_4 = SqueezeBlock(16)
+        self.se_1_8 = SqueezeBlock(24)
+
+        self.conv_out = nn.Conv2d(16, 1, 1, groups=1)
+        self.out = nn.Hardsigmoid(inplace=True)
+        self.hrelu = nn.Hardrelu(inplace=True)
+
+    def forward(self, x):
+        y = x
+        # y = self.in_pool(x)
+
+        # 1/2
+        y1 = y = self.features[0](y)
+        a1 = self.se_1_2(y)
+
+        # 1/4
+        y2 = y = self.features[1](y)
+        a2 = self.se_1_4(y)
+
+        # 1/8
+        y3 = y = self.features[2:4](y)
+        a3 = self.se_1_8(y)
+
+        # 1/16 -> 1/32
+        y = self.features[4:](y)
+
+        y = self.tconv_1_32(y)
+        y = self.tconv_1_16(y) + y3
+        y = self.hrelu(y)
+        y = torch.multiply(y, a3)
+        y = self.tconv_1_8(y) + y2
+        y = self.hrelu(y)
+        y = torch.multiply(y, a2)
+        y = self.tconv_1_4(y) + y1
+        y = self.hrelu(y)
+        y = torch.multiply(y, a1)
+        y = self.tconv_1_2(y)
+
+        y = self.conv_out(y)
+        y = F.interpolate(y, x.shape[2:])
+        y = self.out(y)
         return y
