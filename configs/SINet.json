@@ -1,0 +1,22 @@
+{
+  "model": {
+    "name": "sinet.SINet",
+    "path": "checkpoint/SINet.pth",
+    "args": [1]
+  },
+  "dataset": {
+    "name": "datasets.SegmentationData",
+    "kwargs": {
+      "datadir": "dataset/Portrait256/"
+    }
+  },
+  "hyper": {
+    "batch_size": 100,
+    "decay_every": 10,
+    "lr": 0.0009,
+    "end_epoch": 75
+  },
+  "loss": {
+    "name": "loss_functions.hybrid_e_loss"
+  }
+}
