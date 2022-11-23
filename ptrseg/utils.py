@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 import os
 from os import path
 from torch import Tensor
@@ -7,9 +8,10 @@ from torchvision.datasets import VisionDataset
 from torch.utils.data import DataLoader
 from typing import Tuple
 from PIL import Image
-from functools import lru_cache
+from functools import lru_cache, singledispatch
 
 
+@singledispatch
 def letterbox(image: Tensor, size, fill=0.5):
     # Thumbnail
     orig_size = image.shape[-2:]
@@ -25,6 +27,13 @@ def letterbox(image: Tensor, size, fill=0.5):
 
     # Resize one last time
     image = FT.resize(image, size)
+    return image
+
+@letterbox.register(np.ndarray)
+def letterbox_numpy(image: np.ndarray, *args, **kwargs):
+    image = image.transpose((2, 0, 1))
+    image = letterbox(torch.tensor(image), *args, **kwargs)
+    image = image.numpy().transpose((1, 2, 0))
     return image
 
 
@@ -65,5 +74,7 @@ class SegmentDataset(VisionDataset):
         mask_path = path.join(self.root, self.mask_dir, name)
         image = self.load_sample(image_path)
         mask = self.load_sample(mask_path)
-        mask = mask.squeeze(0).type(torch.long)
+        mask = mask.squeeze(0) > 0
+        mask = mask.type(torch.long)
+
         return image, mask

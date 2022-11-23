@@ -5,19 +5,21 @@ from torchvision.models._utils import IntermediateLayerGetter
 from typing import List
 import pytorch_lightning as pl
 from torchmetrics import JaccardIndex
+import numpy as np
 
 configs = dict(
-    shufflenet_v2_x2_0 = dict(
-        features = "",
-        layers = ["stage2", "stage3", "stage4"],
-        channels = [244, 488, 976]
+    shufflenet_v2_x2_0=dict(
+        features="",
+        layers=["stage2", "stage3", "stage4"],
+        head_upscale=8,
     ),
-    mobilenet_v3_large = dict(
-        features = "features",
-        layers = ["3", "6", "12", "15"],
-        channels = [24, 40, 112, 160]
+    mobilenet_v3_large=dict(
+        features="features",
+        layers=["3", "6", "12", "16"],
+        head_upscale=4,
     )
 )
+
 
 class FeaturePyramidNetwork(nn.Module):
     def __init__(
@@ -85,49 +87,60 @@ class DBHead(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         prob = self.prob_head(x)
-        if self.training:
-            thres = self.thres_head(x)
-        else:
-            thres = None
+        thres = self.thres_head(x)
         return prob, thres
 
     def make_branch(self):
         hidden_dim = self.hidden_dim
+        mid_dim = hidden_dim // 4
+        # num_layers = np.log(self.upscale) / np.log(2)
+        layers = []
         return nn.Sequential(
             nn.ConvTranspose2d(hidden_dim,
-                               hidden_dim//2,
+                               mid_dim,
                                kernel_size=2,
                                stride=2,
                                bias=False),
-            nn.BatchNorm2d(hidden_dim//2),
+            nn.BatchNorm2d(mid_dim),
             nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(hidden_dim//2,
-                               hidden_dim//4,
-                               kernel_size=2,
-                               stride=2,
-                               bias=False),
-            nn.BatchNorm2d(hidden_dim//4),
-            nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(hidden_dim // 4, 1, 2, stride=2),
+            # nn.ConvTranspose2d(mid_dim,
+            #                    mid_dim,
+            #                    kernel_size=2,
+            #                    stride=2,
+            #                    bias=False),
+            # nn.BatchNorm2d(mid_dim),
+            # nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(mid_dim, 1, 2, stride=2),
         )
 
 
 class FPNDBNet(pl.LightningModule):
-    def __init__(self, hidden_dim=255):
+    def __init__(self, backbone: str, hidden_dim: int = 256):
         super().__init__()
-        backbone = models.shufflenet_v2_x2_0()
+
+        # config
+        cfg = configs[backbone]
+
+        print(cfg)
+        backbone = getattr(models, backbone)(pretrained=True)
         self.features = IntermediateLayerGetter(
-            backbone,
-            dict(stage2='stage2',
-                 stage3='stage3',
-                 stage4='stage4')
+            dict(backbone.named_modules())[cfg['features']],
+            dict(zip(cfg['layers'], cfg['layers']))
         )
-        self.fpn = FeaturePyramidNetwork([244, 488, 976], hidden_dim)
+
+        with torch.no_grad():
+            features = self.features(torch.rand(1, 3, 112, 112))
+        channels = [v.shape[1] for v in features.values()]
+        self.fpn_keys = cfg['layers']
+        self.fpn = FeaturePyramidNetwork(channels, hidden_dim)
         self.dbhead = DBHead(hidden_dim)
 
     def forward(self, x: Tensor) -> Tensor:
         features = self.features(x)
-        features = self.fpn(list(features.values()))
+        # for k, v in features.items():
+        #     print(k, v.shape)
+        features = self.fpn([features[k] for k in self.fpn_keys])
+        # print('ft', features.shape)
         prob, thres = self.dbhead(features)
         return prob, thres
 
@@ -193,10 +206,13 @@ class Learner(pl.LightningModule):
 
 
 class SegmentLearner(Learner):
-    def __init__(self, hidden_dim: int = 255, learning_rate=5e-4):
+    def __init__(self,
+                 backbone: str = "mobilenet_v3_large",
+                 hidden_dim: int = 255,
+                 learning_rate=5e-4):
         super().__init__()
         self.learning_rate = learning_rate
-        self.model = FPNDBNet(hidden_dim)
+        self.model = FPNDBNet(backbone, hidden_dim)
         self.loss = nn.CrossEntropyLoss(
             weight=torch.tensor([0.1, 1]))
         self.score = JaccardIndex(2)
@@ -216,6 +232,5 @@ class SegmentLearner(Learner):
             logits = torch.cat([thres, prob], dim=1)
             loss = self.loss(logits, mask)
             output['loss'] = loss
-        
-        return output
 
+        return output
