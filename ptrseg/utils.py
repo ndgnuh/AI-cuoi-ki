@@ -35,14 +35,17 @@ class SegmentDataset(VisionDataset):
                  image_dir: str = "image",
                  mask_dir: str = "mask",
                  cached: bool = True,
+                 reverse: bool = False,
                  **kwargs):
         super().__init__(root=root, **kwargs)
         self.root = root
         self.image_dir = image_dir
         self.mask_dir = mask_dir
         self.image_size = image_size
-
         self.imgs = os.listdir(path.join(root, image_dir))
+
+        if reverse:
+            self.images = list(reversed(self.imgs))
 
         if cached:
             self.load_sample = lru_cache(self.load_sample)
@@ -50,16 +53,17 @@ class SegmentDataset(VisionDataset):
     def __len__(self):
         return len(self.imgs)
 
-    def load_sample(self, image_path):
+    def load_sample(self, image_path: str):
         image = Image.open(image_path)
         image = FT.to_tensor(image)
         image = letterbox(image, self.image_size)
         return image
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int):
         name = self.imgs[index]
         image_path = path.join(self.root, self.image_dir, name)
         mask_path = path.join(self.root, self.mask_dir, name)
         image = self.load_sample(image_path)
         mask = self.load_sample(mask_path)
+        mask = mask.squeeze(0).type(torch.long)
         return image, mask
