@@ -6,6 +6,18 @@ from typing import List
 import pytorch_lightning as pl
 from torchmetrics import JaccardIndex
 
+configs = dict(
+    shufflenet_v2_x2_0 = dict(
+        features = "",
+        layers = ["stage2", "stage3", "stage4"],
+        channels = [244, 488, 976]
+    ),
+    mobilenet_v3_large = dict(
+        features = "features",
+        layers = ["3", "6", "12", "15"],
+        channels = [24, 40, 112, 160]
+    )
+)
 
 class FeaturePyramidNetwork(nn.Module):
     def __init__(
@@ -100,7 +112,7 @@ class DBHead(nn.Module):
         )
 
 
-class FPNDBNet(nn.Module):
+class FPNDBNet(pl.LightningModule):
     def __init__(self, hidden_dim=255):
         super().__init__()
         backbone = models.shufflenet_v2_x2_0()
@@ -196,7 +208,7 @@ class SegmentLearner(Learner):
         output = dict()
         with torch.no_grad():
             if mask is not None:
-                predict = torch.sigmoid(prob) > 0
+                predict = torch.sigmoid(prob) > -0.5
                 score = self.score(predict, mask)
                 output['scores'] = (score,)
 
@@ -206,3 +218,4 @@ class SegmentLearner(Learner):
             output['loss'] = loss
         
         return output
+

@@ -4,3 +4,4 @@ pytorch_lightning
 opencv-python
 numpy
 scipy
+onnxruntime
